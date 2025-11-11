@@ -1,7 +1,101 @@
 @extends('Backend.layouts.app')
 
 @section('content')
+<style>
+  /* ---------- Screen tweaks stay the same ---------- */
+  .print-header { display: none; }
+
+  /* ---------- A4 fit-to-width print rules ---------- */
+  @page {
+    size: A4 portrait;
+    margin: 10mm; /* tight, but readable; adjust if needed */
+  }
+
+  @media print {
+    /* Ensure browser prints colors & backgrounds decently */
+    * {
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* Remove everything except printable-area */
+    body * { visibility: hidden; }
+    #printable-area, #printable-area * { visibility: visible; }
+
+    /* Fix page width to A4 content box */
+    html, body {
+      width: 210mm;
+      height: 297mm;
+      margin: 0;
+      padding: 0;
+      overflow: visible !important;
+    }
+
+    /* Fit container to page width */
+    #printable-area {
+      position: static !important;
+      left: 0; top: 0;
+      width: 100% !important;
+      max-width: 190mm; /* 210mm - margins (approx) */
+      margin: 0 auto !important;
+    }
+
+    /* Show a simple header in print */
+    .print-header {
+      display: block !important;
+      text-align: center;
+      margin: 0 0 8mm 0;
+    }
+
+    /* Neutralize layout that can push width */
+    .no-print { display: none !important; }
+    .shadow-sm, .shadow, .shadow-md, .shadow-lg { box-shadow: none !important; }
+    .border { border-color: #ddd !important; }
+    .bg-white, .bg-gray-50, .bg-gradient-to-r { background: #fff !important; }
+    .from-blue-50, .to-indigo-50 { background: #fff !important; }
+    .overflow-x-auto { overflow: visible !important; }
+
+    /* Remove sticky columns in print (can break width) */
+    .sticky { position: static !important; }
+
+    /* Tighten typography for print */
+    #printable-area, #printable-area table {
+      font-size: 10px !important;
+      line-height: 1.25 !important;
+    }
+
+    /* Table should never exceed page width */
+    table {
+      width: 100% !important;
+      table-layout: fixed !important; /* crucial for fit */
+      border-collapse: collapse !important;
+    }
+
+    thead tr th, tbody tr td {
+      padding: 4px 6px !important; /* tighter cells for fit */
+      word-wrap: break-word !important;
+      overflow-wrap: anywhere !important;
+      white-space: normal !important;
+      border: 1px solid #ccc !important;
+    }
+
+    /* Remove min-width that tailwind might inject from classes */
+    [class*="min-w-"] { min-width: 0 !important; }
+
+    /* Smaller badges */
+    .rounded-lg, .rounded-md, .rounded-xl { border-radius: 4px !important; }
+    .px-2\.5 { padding-left: 6px !important; padding-right: 6px !important; }
+    .py-1\.5 { padding-top: 3px !important; padding-bottom: 3px !important; }
+
+    /* Avoid breaking rows or tables across pages */
+    table, thead, tbody, tr { page-break-inside: avoid !important; }
+    .semester-block { page-break-after: always; }
+    .semester-block:last-of-type { page-break-after: auto; }
+  }
+</style>
+
 @php
+
   // Define the time conversion function
   if (!function_exists('convertTo12Hour')) {
     function convertTo12Hour($time) {

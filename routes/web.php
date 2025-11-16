@@ -3,7 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\SeatPlanController;
+use App\Http\Controllers\Admin\SeatPlanController;
 use App\Http\Controllers\Admin\RoomController;
 use App\Http\Controllers\Admin\FacultyController;
 use App\Http\Controllers\Admin\StudentController;
@@ -11,6 +11,10 @@ use App\Http\Controllers\Admin\RoutineController;
 use App\Http\Controllers\Admin\FacultySubjectController;
 use App\Http\Controllers\Admin\ExamController;
 use App\Http\Controllers\Admin\RoutineBuilderController;
+use App\Http\Controllers\Admin\EmployeeController;
+use App\Http\Controllers\Admin\StudentImportController;
+use App\Http\Controllers\Admin\RoomAllocationController;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -56,6 +60,20 @@ Route::group(['middleware' => 'admin.auth'], function () {
 
         Route::get('/routine-builder', [RoutineBuilderController::class, 'create'])->name('routine.builder.create');
         Route::post('/routine-builder/generate', [RoutineBuilderController::class, 'store'])->name('routine.builder.store');
+
+        Route::resource('employees', EmployeeController::class);
+        Route::get('/admin/exam-import', [StudentImportController::class, 'create'])->name('exam.import.create');
+        Route::post('/admin/exam-import', [StudentImportController::class, 'store'])->name('exam.import.store');
+
+
+        Route::get('/admin/room-allocations', [RoomAllocationController::class, 'index'])
+            ->name('room_allocations.index');
+        Route::post('/admin/room-allocations', [RoomAllocationController::class, 'store'])
+            ->name('room_allocations.store');
+
+
+            Route::get('seat-plans', [SeatPlanController::class, 'index'])
+    ->name('seat_plans.index');
     });
 
     Route::get('faculty-subjects', [FacultySubjectController::class, 'index'])->name('faculty_subjects.index');
@@ -65,7 +83,5 @@ Route::group(['middleware' => 'admin.auth'], function () {
 
 
 
-    Route::get('/seat-plan/create', [SeatPlanController::class, 'create'])->name('seatplan.create');
-    Route::post('/seat-plan', [SeatPlanController::class, 'store'])->name('seatplan.store');
-    Route::get('/seat-plan/{exam}', [SeatPlanController::class, 'show'])->name('seatplan.show');
+    
 });

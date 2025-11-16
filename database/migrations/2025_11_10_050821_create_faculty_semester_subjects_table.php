@@ -10,18 +10,28 @@ return new class extends Migration {
     {
         Schema::create('faculty_semester_subjects', function (Blueprint $t) {
             $t->id();
+
             $t->foreignId('faculty_id')
                 ->constrained('faculties')
                 ->cascadeOnDelete();
-            
-            $t->unsignedTinyInteger('semester');       // 1..12
+
+            $t->unsignedTinyInteger('semester');          // 1..12
             $t->unsignedTinyInteger('batch')->default(1); // 1 = new, 2 = old
+
+            // Pointer to master subject
+            $t->foreignId('subject_id')
+                ->constrained('subjects')
+                ->cascadeOnDelete();
+
+            // Keep subject_code locally for imports / joins
             $t->string('subject_code', 80);
-            $t->string('subject_name', 191);
+
             $t->timestamps();
 
-            // Short and clear constraint/index names
-            $t->unique(['faculty_id', 'semester', 'batch', 'subject_code'], 'fss_fac_sem_bat_sub_uq');
+            $t->unique(
+                ['faculty_id', 'semester', 'batch', 'subject_code'],
+                'fss_fac_sem_bat_sub_uq'
+            );
             $t->index(['semester', 'batch'], 'fss_sem_bat_idx');
         });
     }

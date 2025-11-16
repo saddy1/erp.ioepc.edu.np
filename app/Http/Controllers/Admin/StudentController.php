@@ -1,62 +1,92 @@
 <?php
-// app/Http/Controllers/Admin/StudentController.php
+
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\{Student, Faculty};
 use Illuminate\Http\Request;
+use App\Models\{
+    Exam,
+    Faculty,
+    ExamRegistration
+};
 
 class StudentController extends Controller
 {
-  public function index(Request $r){
-    $q = Student::with('faculty')->orderBy('semester')->orderBy('symbol_no');
-    if ($r->filled('faculty_id')) $q->where('faculty_id', $r->integer('faculty_id'));
-    if ($r->filled('semester')) $q->where('semester', $r->integer('semester'));
-    if ($r->filled('search')) {
-      $s = $r->string('search');
-      $q->where(function($w) use($s){
-        $w->where('name','like',"%$s%")->orWhere('symbol_no','like',"%$s%");
-      });
+    public function index(Request $r)
+    {
+        $examId    = $r->query('exam_id');
+        $semester  = $r->query('semester');
+        $batch     = $r->query('batch');
+        $facultyId = $r->query('faculty_id');
+
+        // Exams for filter
+        $exams = Exam::orderByDesc('id')
+            ->get(['id', 'exam_title', 'semester', 'batch']);
+
+        // Faculties for filter + grouping
+        $faculties = Faculty::orderBy('code')->get();
+
+        // Base query: registrations + related data
+        $q = ExamRegistration::with([
+                'student',              // Student (campus_roll_no, name, etc.)
+                'faculty',              // Faculty (code, name)
+                'exam',                 // Exam (title, etc.)
+                'subjects.fss.subject', // ExamRegistrationSubject → FacultySemesterSubject → Subject (for name + practical)
+            ])
+            ->when($examId,   fn($q) => $q->where('exam_id', $examId))
+            ->when($semester, fn($q) => $q->where('semester', $semester))
+            ->when($batch,    fn($q) => $q->where('batch', $batch))
+            ->when($facultyId,fn($q) => $q->where('faculty_id', $facultyId))
+            ->orderBy('faculty_id')
+            ->orderBy('exam_roll_no');
+
+        // Paginate so page does not explode
+        $registrations = $q->paginate(100)->withQueryString();
+
+        $collection = $registrations->getCollection(); // current page data
+
+        // Group by faculty for collapsible cards
+        $byFaculty = $collection->groupBy('faculty_id');
+
+        // Total students (all filtered, not just this page)
+        $totalStudents = $registrations->total();
+
+        // Subject-wise student counts (current page only) + names
+        $subjectCounts = [];
+        $subjectNames  = []; // ['ENSH151' => 'Engineering Mathematics II', ...]
+
+        foreach ($collection as $reg) {
+            foreach ($reg->subjects as $sub) {
+                if (!($sub->th_taking || $sub->p_taking)) {
+                    continue;
+                }
+
+                $code = $sub->subject_code;
+                if (!$code) {
+                    continue;
+                }
+
+                $subjectCounts[$code] = ($subjectCounts[$code] ?? 0) + 1;
+
+                // Try to capture subject name from master subjects via relation
+                if (!isset($subjectNames[$code])) {
+                    $subjectNames[$code] = optional(optional($sub->fss)->subject)->name;
+                }
+            }
+        }
+
+        return view('Backend.admin.exam_import.index', compact(
+            'registrations',
+            'byFaculty',
+            'faculties',
+            'exams',
+            'subjectCounts',
+            'subjectNames',
+            'totalStudents',
+            'examId',
+            'semester',
+            'batch',
+            'facultyId'
+        ));
     }
-    $students = $q->paginate(25)->withQueryString();
-    $faculties = Faculty::orderBy('code')->get();
-    return view('Backend.admin.students.index', compact('students','faculties'));
-  }
-
-  public function create(){
-    $faculties = Faculty::orderBy('code')->get();
-    return view('Backend.admin.students.create', compact('faculties'));
-  }
-
-  public function store(Request $r){
-    $data = $r->validate([
-      'name' => ['required','string','max:120'],
-      'symbol_no' => ['required','string','max:50','unique:students,symbol_no'],
-      'faculty_id' => ['required','exists:faculties,id'],
-      'semester' => ['required','integer','min:1','max:12'],
-    ]);
-    Student::create($data);
-    return redirect()->route('students.index')->with('ok','Student added.');
-  }
-
-  public function edit(Student $student){
-    $faculties = Faculty::orderBy('code')->get();
-    return view('Backend.admin.students.edit', compact('student','faculties'));
-  }
-
-  public function update(Request $r, Student $student){
-    $data = $r->validate([
-      'name' => ['required','string','max:120'],
-      'symbol_no' => ['required','string','max:50',"unique:students,symbol_no,{$student->id}"],
-      'faculty_id' => ['required','exists:faculties,id'],
-      'semester' => ['required','integer','min:1','max:12'],
-    ]);
-    $student->update($data);
-    return redirect()->route('students.index')->with('ok','Student updated.');
-  }
-
-  public function destroy(Student $student){
-    $student->delete();
-    return back()->with('ok','Student deleted.');
-  }
 }

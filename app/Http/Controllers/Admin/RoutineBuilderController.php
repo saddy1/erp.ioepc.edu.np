@@ -68,20 +68,28 @@ class RoutineBuilderController extends Controller
                 }
 
                 // All possible subjects per faculty for this semester/batch
+                // NOTE: subject name now lives in Subject model via ->subject relation
                 $all = FacultySemesterSubject::where('semester', $selectedSemester)
                     ->where('batch', $batchNum)
+                    ->with('subject') // make sure we have name + has_practical loaded
                     ->orderBy('faculty_id')
                     ->orderBy('subject_code')
-                    ->get(['faculty_id','subject_code','subject_name'])
+                    ->get(['id','faculty_id','subject_id','subject_code'])
                     ->groupBy('faculty_id');
 
                 // presets = remainingSubjects = all - used
                 foreach ($all as $fid => $items) {
                     $remain = [];
                     foreach ($items as $it) {
-                        $code = strtoupper($it->subject_code);
+                        $code   = strtoupper($it->subject_code);
+                        $master = $it->subject; // Subject model
+                        $name   = $master?->name ?? $it->subject_code; // fallback to code if no name
+
                         if (empty($usedByFaculty[$fid][$code])) {
-                            $remain[] = ['code' => $it->subject_code, 'name' => $it->subject_name];
+                            $remain[] = [
+                                'code' => $it->subject_code,
+                                'name' => $name,
+                            ];
                         }
                     }
                     $presets[$fid] = $remain; // may be empty => show "No Subjects"
@@ -90,7 +98,14 @@ class RoutineBuilderController extends Controller
         }
 
         return view('Backend.admin.routine_builder.create', compact(
-            'exams', 'exam', 'batchNum', 'allowedSems', 'selectedSemester', 'faculties', 'presets', 'slots'
+            'exams',
+            'exam',
+            'batchNum',
+            'allowedSems',
+            'selectedSemester',
+            'faculties',
+            'presets',
+            'slots'
         ));
     }
 
@@ -213,10 +228,10 @@ class RoutineBuilderController extends Controller
             return back()->withErrors(['error' => 'Failed to save routine: '.$e->getMessage()])->withInput();
         }
 
+        // keep same redirect semantics, just use exam_id in query
         return redirect()->route('routine.builder.create', [
-            'exam_title' => $exam->exam_title,
-            'batch'      => (string) $batchNum,
-            'semester'   => $semester,
+            'exam_id'  => $exam->id,
+            'semester' => $semester,
         ])->with('ok', 'Routine saved successfully!');
     }
 }

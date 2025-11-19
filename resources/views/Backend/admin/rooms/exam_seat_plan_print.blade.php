@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Exam Seat Plan</title>
+    <style>
+        * { 
+            box-sizing: border-box; 
+            margin: 0;
+            padding: 0;
+        }
+        
+        body { 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            font-size: 12px; 
+            margin: 20px;
+            line-height: 1.3;
+            color: #333;
+        }
+        
+        table { 
+            border-collapse: collapse; 
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        
+        th, td { 
+            border: 1.5px solid #000; 
+            padding: 6px 8px;
+            font-size: 11px;
+        }
+        
+        th { 
+            text-align: center;
+            background-color: #f5f5f5;
+            font-weight: 600;
+            font-size: 12px;
+        }
+        
+        .text-center { 
+            text-align: center; 
+        }
+        
+        .mb-2 { 
+            margin-bottom: 12px; 
+        }
+        
+        .mb-4 { 
+            margin-bottom: 25px; 
+        }
+        
+        .bold { 
+            font-weight: 700; 
+        }
+        
+        /* Header Styles */
+        .header-container {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 15px;
+            border-bottom: 2px solid #333;
+        }
+        
+        .header-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .header-info {
+            font-size: 15px;
+            color: #555;
+        }
+        
+        /* Summary Table */
+        .summary-table th {
+            background-color: #e8e8e8;
+        }
+        
+        .summary-table .total-row {
+            background-color: #f9f9f9;
+            font-weight: 700;
+        }
+        
+        /* Room Table */
+        .room-table td {
+            vertical-align: top;
+        }
+        
+        .room-table .room-total-row {
+            background-color: #f0f0f0;
+            font-weight: 700;
+        }
+        
+        .roll-numbers {
+            line-height: 1.6;
+            word-wrap: break-word;
+        }
+        
+        /* Print Styles */
+        @media print {
+            body {
+                margin: 10px;
+                font-size: 11px;
+            }
+            
+            table {
+                page-break-inside: auto;
+            }
+            
+            thead {
+                display: table-header-group;
+            }
+            
+            tr {
+                page-break-inside: avoid;
+            }
+            
+            .header-container {
+                margin-bottom: 15px;
+                padding: 10px;
+            }
+            
+            .header-title {
+                font-size: 16px;
+                margin-bottom: 8px;
+            }
+            
+            .header-info {
+                font-size: 12px;
+            }
+            
+            th, td {
+                padding: 6px 8px;
+                font-size: 11px;
+            }
+            
+            th {
+                font-size: 11px;
+            }
+            
+            .mb-4 {
+                margin-bottom: 15px;
+            }
+        }
+        
+        @page {
+            size: A4;
+            margin: 1cm;
+        }
+    </style>
+</head>
+<body onload="window.print()">
+
+    {{-- Header --}}
+    <div class="header-container">
+        <div class="header-title">EXAM SEAT PLAN – {{ $exam?->exam_title }}</div>
+        <div class="header-info">
+            DATE: {{ $examDate }}
+            @if($exam?->semester)
+                &nbsp; | &nbsp; Semester: {{ $exam->semester }}
+            @endif
+            @if($batch)
+                &nbsp; | &nbsp; Batch: {{ $batch == 1 ? 'New' : 'Old' }}
+            @endif
+        </div>
+    </div>
+
+    @if(!$hasData)
+        <p class="text-center" style="font-size: 16px; padding: 20px;">No data to display.</p>
+    @else
+
+        {{-- ================= TOP SUMMARY TABLE (PROGRAMME / SUBJECT / REGULAR / BACK) ================= --}}
+        @php
+            $sumRegular = collect($summaryRows ?? [])->sum('regular');
+            $sumBack    = collect($summaryRows ?? [])->sum('back');
+            $sumTotal   = collect($summaryRows ?? [])->sum('total');
+        @endphp
+
+        @if(!empty($summaryRows))
+            <table class="summary-table mb-4">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">S.N.</th>
+                        <th style="width: 200px;">Programme</th>
+                        <th style="width: 80px;">Semester</th>
+                        <th>Subject</th>
+                        <th style="width: 80px;">Regular</th>
+                        <th style="width: 80px;">Back</th>
+                        <th style="width: 80px;">Total</th>
+                        <th style="width: 120px;">Remarks</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach($summaryRows as $idx => $row)
+                        <tr>
+                            <td class="text-center">{{ $idx + 1 }}</td>
+                            <td>{{ $row['programme'] ?? '' }}</td>
+                            <td class="text-center">{{ $row['semester'] ?? '' }}</td>
+                            <td>{{ $row['subject'] ?? '' }}</td>
+                            <td class="text-center">{{ $row['regular'] ?? 0 }}</td>
+                            <td class="text-center">{{ $row['back'] ?? 0 }}</td>
+                            <td class="text-center">{{ $row['total'] ?? 0 }}</td>
+                            <td>{{ $row['remarks'] ?? '' }}</td>
+                        </tr>
+                    @endforeach
+                    {{-- Total row --}}
+                    <tr class="total-row">
+                        <td></td>
+                        <td class="bold text-center">TOTAL</td>
+                        <td></td>
+                        <td></td>
+                        <td class="text-center bold">{{ $sumRegular }}</td>
+                        <td class="text-center bold">{{ $sumBack }}</td>
+                        <td class="text-center bold">{{ $sumTotal }}</td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+        @endif
+        {{-- ================= END TOP SUMMARY TABLE ================= --}}
+
+        {{-- ================= ROOM-WISE ROLL LIST ================= --}}
+        <table class="room-table">
+            <thead>
+                <tr>
+                    <th style="width: 80px;">Room No.</th>
+                    <th style="width: 100px;">Faculty</th>
+                    <th>Exam Roll No. (Symbol)</th>
+                    <th style="width: 70px;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($roomSummaries as $roomId => $info)
+                    @php
+                        $room = $info['room'];
+                        $rows = $info['rows'];
+                    @endphp
+
+                    @foreach($rows as $row)
+                        <tr>
+                            <td class="text-center"><strong>{{ $room->room_no }}</strong></td>
+                            <td class="text-center">
+                                @if($row['faculty'])
+                                    <strong>{{ $row['faculty']->code }}</strong>
+                                @else
+                                    —
+                                @endif
+                            </td>
+                            <td class="roll-numbers">{{ implode(', ', $row['rolls']) }}</td>
+                            <td class="text-center"><strong>{{ $row['total'] }}</strong></td>
+                        </tr>
+                    @endforeach
+                    <tr class="room-total-row">
+                        <td colspan="3" class="text-center bold">
+                            ROOM {{ $room->room_no }} TOTAL
+                        </td>
+                        <td class="text-center bold">{{ $info['room_total'] }}</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+        {{-- ================= END ROOM-WISE ROLL LIST ================= --}}
+    @endif
+</body>
+</html>

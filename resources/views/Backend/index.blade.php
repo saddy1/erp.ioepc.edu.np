@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@yield('title', 'Portal')</title>
 
-    <script src="https://cdn.tailwindcss.com"></script>
+    @vite('resources/css/app.css')
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
 
 </head>
@@ -16,8 +16,8 @@
     <!-- HEADER (fixed to screen sides) -->
     <header class="fixed inset-x-0 top-0 h-16 bg-white shadow-lg z-50">
         <div class="h-full px-4 md:px-6 flex items-center justify-between">
-            <a href="{{ url('/') }}" class="flex items-center gap-2">
-                <img src="{{ asset('asset/assets/ioepc_logo.png') }}" class="h-10 w-auto" alt="Logo">
+            <a href="{{ route('admin.login.form') }}" class="flex items-center gap-2">
+                <img src="{{ asset('assets/ioepc_logo.png') }}" class="h-10 w-auto" alt="Logo">
                 <span class="text-lg md:text-xl font-bold text-blue-900"> IOE Purwanchal Campus</span>
             </a>
 

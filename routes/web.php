@@ -28,7 +28,7 @@ use App\Http\Controllers\Admin\RoomAllocationController;
 */
 
 
-Route::get('/', [AuthController::class, 'showAdminLogin'])->name('admin.login.form');
+Route::get('/login/admin', [AuthController::class, 'showAdminLogin'])->name('admin.login.form');
 Route::post('/login/admin', [AuthController::class, 'adminLogin'])->name('admin.login');
 
 Route::group(['middleware' => 'admin.auth'], function () {
@@ -89,6 +89,12 @@ Route::group(['middleware' => 'admin.auth'], function () {
 
         Route::post('seat-plans/print-seat-plan', [SeatPlanController::class, 'printSeatPlan'])->name('seat_plans.print_seat_plan');
         Route::get('seat-plans/print-seat-plan', [SeatPlanController::class, 'index'])->name('seat_plans.print_seat_plan');
+
+        Route::get('rooms/exam-seat-plan', [RoomController::class, 'examSeatPlan'])
+    ->name('rooms.exam_seat_plan');
+
+Route::get('rooms/exam-seat-plan/print', [RoomController::class, 'examSeatPlanPrint'])
+    ->name('rooms.exam_seat_plan.print');
     });
 
     Route::get('faculty-subjects', [FacultySubjectController::class, 'index'])->name('faculty_subjects.index');

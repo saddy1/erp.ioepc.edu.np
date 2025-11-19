@@ -93,11 +93,7 @@
                             <span>Dashboard</span>
                         </a>
                     </li>
-                  <li>
-                        <a href="{{ route('seat_plans.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
-                            <i class="fas fa-door-open w-5 text-gray-300"></i><span>Seatplan</span>
-                        </a>
-                    </li>
+                  
                     <li>
                         <a href="{{ route('rooms.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
                             <i class="fas fa-door-open w-5 text-gray-300"></i><span>Rooms</span>
@@ -148,8 +144,8 @@
                     </li>
 
                     <li>
-                        <a href="#settings" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
-                            <i class="fas fa-cog w-5 text-gray-300"></i><span>Settings</span>
+                        <a href="{{ route('seat_plans.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
+                            <i class="fas fa-door-open w-5 text-gray-300"></i><span>Seatplan</span>
                         </a>
                     </li>
 

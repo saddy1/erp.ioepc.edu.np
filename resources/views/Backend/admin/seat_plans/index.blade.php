@@ -172,7 +172,7 @@
             @if ($examId && $examDate && $hasData)
                 <div class="mt-3 pt-3 border-t flex flex-wrap gap-2">
                     {{-- Download Seat Plan (Landscape) --}}
-                    <form method="POST" action="{{ route('seat_plans.download_seat_plan') }}" class="inline">
+                    {{-- <form method="POST" action="{{ route('seat_plans.download_seat_plan') }}" class="inline">
                         @csrf
                         <input type="hidden" name="exam_id" value="{{ $examId }}">
                         <input type="hidden" name="exam_date" value="{{ $examDate }}">
@@ -186,7 +186,7 @@
                             </svg>
                             Download Seat Plan
                         </button>
-                    </form>
+                    </form> --}}
 
                     {{-- Print Seat Plan (Landscape) --}}
                     <form method="POST" action="{{ route('seat_plans.print_seat_plan') }}" class="inline" target="_blank">
@@ -204,9 +204,10 @@
                             Print Seat Plan
                         </button>
                     </form>
+                    
 
                     {{-- Download Attendance Sheets --}}
-                    <form method="POST" action="{{ route('seat_plans.download_attendance') }}" class="inline">
+                    {{-- <form method="POST" action="{{ route('seat_plans.download_attendance') }}" class="inline">
                         @csrf
                         <input type="hidden" name="exam_id" value="{{ $examId }}">
                         <input type="hidden" name="exam_date" value="{{ $examDate }}">
@@ -220,7 +221,7 @@
                             </svg>
                             Download Attendance Sheets
                         </button>
-                    </form>
+                    </form> --}}
 
                     {{-- Print Attendance Sheets --}}
                     <form method="POST" action="{{ route('seat_plans.print_attendance') }}" class="inline" target="_blank">
@@ -238,7 +239,15 @@
                             Print Attendance Sheets
                         </button>
                     </form>
+                   
+            <a href="{{ route('rooms.exam_seat_plan.print', ['exam_id' => $examId, 'exam_date' => $examDate, 'batch' => $batch]) }}"
+               target="_blank"
+               class="inline-flex items-center rounded-lg bg-gray-900 text-white px-3 py-2 text-[11px] font-semibold hover:bg-gray-800">
+                Print Sheet
+            </a>
+  
                 </div>
+                
             @endif
         </div>
 

@@ -153,7 +153,14 @@
             border: 1px solid #dddddd;
             padding: 5px 6px;
         }
-        .bench-symbol {
+           .bench-symbol-left {
+            font-family: "Courier New", monospace;
+            font-size: 15px;
+            font-weight: bold;
+            text-align: left;
+            width: 50%;
+        }
+        .bench-symbol-right {
             font-family: "Courier New", monospace;
             font-size: 15px;
             font-weight: bold;
@@ -177,7 +184,20 @@
 <div class="page-wrapper">
 
     <!-- MAIN HEADER -->
-    <div class="main-header">
+    
+    @foreach($seatLayout as $roomId => $data)
+        @php
+            $room         = $data['room'];
+            $cols         = $data['cols'];
+            $invigilators = $data['invigilators'] ?? [];
+
+            $maxRows = max(
+                count($cols[1] ?? []),
+                count($cols[2] ?? []),
+                count($cols[3] ?? [])
+            );
+        @endphp
+        <div class="main-header">
         <div class="main-header-title">Examination Seat Plan</div>
         <div class="main-header-meta">
             <strong>{{ $exam->exam_title }}</strong> |
@@ -193,18 +213,6 @@
         </div>
     </div>
 
-    @foreach($seatLayout as $roomId => $data)
-        @php
-            $room         = $data['room'];
-            $cols         = $data['cols'];
-            $invigilators = $data['invigilators'] ?? [];
-
-            $maxRows = max(
-                count($cols[1] ?? []),
-                count($cols[2] ?? []),
-                count($cols[3] ?? [])
-            );
-        @endphp
 
         <div class="room-card">
 
@@ -219,7 +227,7 @@
                                 • Seats: <strong>{{ $room->computed_total_seats }}</strong>
                             </div>
                         </td>
-                        <td style="text-align:right;">
+                        {{-- <td style="text-align:right;">
                             <div class="invigilator-label">Invigilators:</div>
                             <div class="invigilator-badges">
                                 @forelse($invigilators as $inv)
@@ -233,7 +241,7 @@
                                     <span style="font-size:10px; color:#aaa;"><em>Not Assigned</em></span>
                                 @endforelse
                             </div>
-                        </td>
+                        </td> --}}
                     </tr>
                 </table>
             </div>
@@ -272,14 +280,14 @@
                                                 <div class="bench-wrapper {{ $sameSubject ? 'same-subject' : '' }}">
                                                     <table class="bench-inner-table">
                                                         <tr>
-                                                            <td class="bench-symbol">
+                                                            <td class="bench-symbol-left">
                                                                 @if($left && !empty($left['symbol_no']))
                                                                     {{ $left['symbol_no'] }}
                                                                 @else
                                                                     &mdash;
                                                                 @endif
                                                             </td>
-                                                            <td class="bench-symbol">
+                                                            <td class="bench-symbol-right">
                                                                 @if($right && !empty($right['symbol_no']))
                                                                     {{ $right['symbol_no'] }}
                                                                 @else
@@ -290,14 +298,8 @@
                                                     </table>
                                                 </div>
                                             @else
-                                                <div class="bench-wrapper empty">
-                                                    <table class="bench-inner-table">
-                                                        <tr>
-                                                            <td class="bench-symbol">&mdash;</td>
-                                                            <td class="bench-symbol">&mdash;</td>
-                                                        </tr>
-                                                    </table>
-                                                </div>
+                                               
+                                            
                                             @endif
                                         </td>
                                     </tr>

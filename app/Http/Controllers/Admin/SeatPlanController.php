@@ -209,7 +209,10 @@ class SeatPlanController extends Controller
                             continue;
                         }
 
-                        // Helper: remaining counts
+                        // ---------- SEAT PLANNING: SAME FACULTY FIRST, THEN NEXT ----------
+                        // benches: linear 0..(totalBenches-1), later mapped to C1/C2/C3
+                        $benches = array_fill(0, $totalBenches, ['left' => null, 'right' => null]);
+
                         $remaining = function () use (&$roomQueues) {
                             $res = [];
                             foreach ($roomQueues as $key => $queue) {
@@ -218,55 +221,82 @@ class SeatPlanController extends Controller
                             return $res;
                         };
 
-                        // Fill linear seat list with alternation
-                        $seatList       = array_fill(0, $totalSeats, null);
-                        $prevSubjectKey = null;
+                        // Order of papers in this room (faculty-wise)
+                        $paperOrder = $allocForRoom
+                            ->map(fn($a) => $a->faculty_id . '|' . $a->subject_code)
+                            ->unique()
+                            ->values()
+                            ->all();
 
-                        for ($i = 0; $i < $totalSeats; $i++) {
-                            $rem = $remaining();
-                            if (array_sum($rem) === 0) {
-                                break;
+                        /**
+                         * PASS 1: LEFT seats
+                         * - For each paper in order, place 1 student per bench
+                         *   continuously (same faculty/subject grouped).
+                         * - Bench order: C1R1, C1R2, ..., then C2..., then C3...
+                         */
+                        $benchIndex = 0;
+
+                        foreach ($paperOrder as $pKey) {
+                            while (
+                                $benchIndex < $totalBenches &&
+                                !empty($roomQueues[$pKey])
+                            ) {
+                                $student = array_shift($roomQueues[$pKey]);
+                                $benches[$benchIndex]['left'] = $student;
+                                $benchIndex++;
                             }
+                        }
 
-                            // Prefer subjects different from previous seat
-                            $candidates = [];
-                            foreach ($rem as $key => $cnt) {
-                                if ($cnt > 0 && $key !== $prevSubjectKey) {
-                                    $candidates[$key] = $cnt;
+                        /**
+                         * PASS 2: RIGHT seats
+                         * - Again go faculty/subject-wise using same $paperOrder.
+                         * - For each student, first try a bench whose LEFT subject != this subject.
+                         * - If not possible, use any empty right seat (so duplicate subject
+                         *   ends up in "column 2" / right seat).
+                         */
+                        foreach ($paperOrder as $pKey) {
+                            while (!empty($roomQueues[$pKey])) {
+                                $rem = $remaining();
+                                if (array_sum($rem) === 0) {
+                                    break;
                                 }
-                            }
 
-                            // If only one subject left, allow it
-                            if (empty($candidates)) {
-                                foreach ($rem as $key => $cnt) {
-                                    if ($cnt > 0) {
-                                        $candidates[$key] = $cnt;
+                                $targetIndex = null;
+
+                                // 1) Prefer bench where right is empty AND left != this subject
+                                for ($i = 0; $i < $totalBenches; $i++) {
+                                    if ($benches[$i]['right'] !== null) {
+                                        continue;
+                                    }
+                                    $leftKey = $benches[$i]['left']['subject_key'] ?? null;
+                                    if ($leftKey !== $pKey) {
+                                        $targetIndex = $i;
+                                        break;
                                     }
                                 }
-                            }
 
-                            if (empty($candidates)) {
-                                break;
-                            }
+                                // 2) If not found, take ANY bench with empty right
+                                if ($targetIndex === null) {
+                                    for ($i = 0; $i < $totalBenches; $i++) {
+                                        if ($benches[$i]['right'] === null) {
+                                            $targetIndex = $i;
+                                            break;
+                                        }
+                                    }
+                                }
 
-                            arsort($candidates);
-                            $chosenKey = array_key_first($candidates);
+                                // No more free right seats
+                                if ($targetIndex === null) {
+                                    break;
+                                }
 
-                            if (!empty($roomQueues[$chosenKey])) {
-                                $student = array_shift($roomQueues[$chosenKey]);
-                                $seatList[$i] = $student;
-                                $prevSubjectKey = $chosenKey;
+                                $student = array_shift($roomQueues[$pKey]);
+                                $benches[$targetIndex]['right'] = $student;
                             }
                         }
+                        // ---------- END SEAT PLANNING ----------
 
-                        // Convert to benches
-                        $benches = array_fill(0, $totalBenches, ['left' => null, 'right' => null]);
-                        for ($b = 0; $b < $totalBenches; $b++) {
-                            $benches[$b]['left']  = $seatList[$b * 2] ?? null;
-                            $benches[$b]['right'] = $seatList[$b * 2 + 1] ?? null;
-                        }
-
-                        // Map benches to 3 columns
+                        // Map benches to 3 columns: C1 rows, then C2, then C3
                         $cols = [1 => [], 2 => [], 3 => []];
                         $idx  = 0;
 
@@ -762,6 +792,9 @@ class SeatPlanController extends Controller
                 continue;
             }
 
+            // ---------- SEAT PLANNING: SAME FACULTY FIRST, THEN NEXT ----------
+            $benches = array_fill(0, $totalBenches, ['left' => null, 'right' => null]);
+
             $remaining = function () use (&$roomQueues) {
                 $res = [];
                 foreach ($roomQueues as $key => $queue) {
@@ -770,49 +803,67 @@ class SeatPlanController extends Controller
                 return $res;
             };
 
-            $seatList       = array_fill(0, $totalSeats, null);
-            $prevSubjectKey = null;
+            // Order of papers in this room (faculty-wise)
+            $paperOrder = $allocForRoom
+                ->map(fn($a) => $a->faculty_id . '|' . $a->subject_code)
+                ->unique()
+                ->values()
+                ->all();
 
-            for ($i = 0; $i < $totalSeats; $i++) {
-                $rem = $remaining();
-                if (array_sum($rem) === 0) {
-                    break;
+            // PASS 1: LEFT seats (grouped by faculty/subject)
+            $benchIndex = 0;
+            foreach ($paperOrder as $pKey) {
+                while (
+                    $benchIndex < $totalBenches &&
+                    !empty($roomQueues[$pKey])
+                ) {
+                    $student = array_shift($roomQueues[$pKey]);
+                    $benches[$benchIndex]['left'] = $student;
+                    $benchIndex++;
                 }
+            }
 
-                $candidates = [];
-                foreach ($rem as $key => $cnt) {
-                    if ($cnt > 0 && $key !== $prevSubjectKey) {
-                        $candidates[$key] = $cnt;
+            // PASS 2: RIGHT seats (avoid same subject beside each other if possible)
+            foreach ($paperOrder as $pKey) {
+                while (!empty($roomQueues[$pKey])) {
+                    $rem = $remaining();
+                    if (array_sum($rem) === 0) {
+                        break;
                     }
-                }
 
-                if (empty($candidates)) {
-                    foreach ($rem as $key => $cnt) {
-                        if ($cnt > 0) {
-                            $candidates[$key] = $cnt;
+                    $targetIndex = null;
+
+                    // Prefer bench where right is empty AND left != this subject
+                    for ($i = 0; $i < $totalBenches; $i++) {
+                        if ($benches[$i]['right'] !== null) {
+                            continue;
+                        }
+                        $leftKey = $benches[$i]['left']['subject_key'] ?? null;
+                        if ($leftKey !== $pKey) {
+                            $targetIndex = $i;
+                            break;
                         }
                     }
-                }
 
-                if (empty($candidates)) {
-                    break;
-                }
+                    // If not available, use any free right seat
+                    if ($targetIndex === null) {
+                        for ($i = 0; $i < $totalBenches; $i++) {
+                            if ($benches[$i]['right'] === null) {
+                                $targetIndex = $i;
+                                break;
+                            }
+                        }
+                    }
 
-                arsort($candidates);
-                $chosenKey = array_key_first($candidates);
+                    if ($targetIndex === null) {
+                        break;
+                    }
 
-                if (!empty($roomQueues[$chosenKey])) {
-                    $student           = array_shift($roomQueues[$chosenKey]);
-                    $seatList[$i]      = $student;
-                    $prevSubjectKey    = $chosenKey;
+                    $student = array_shift($roomQueues[$pKey]);
+                    $benches[$targetIndex]['right'] = $student;
                 }
             }
-
-            $benches = array_fill(0, $totalBenches, ['left' => null, 'right' => null]);
-            for ($b = 0; $b < $totalBenches; $b++) {
-                $benches[$b]['left']  = $seatList[$b * 2] ?? null;
-                $benches[$b]['right'] = $seatList[$b * 2 + 1] ?? null;
-            }
+            // ---------- END SEAT PLANNING ----------
 
             $cols = [1 => [], 2 => [], 3 => []];
             $idx  = 0;

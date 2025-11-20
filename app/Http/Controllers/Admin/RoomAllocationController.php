@@ -35,7 +35,7 @@ class RoomAllocationController extends Controller
             ->get(['id','exam_title','semester','batch']);
 
         $rooms     = Room::orderBy('room_no')->get();
-        $faculties = Faculty::orderBy('code')->get();
+$faculties = Faculty::codeOrder()->get(['id','name','code']);
 
         $exam           = null;
         $examDates      = []; // Available exam dates for selected exam
@@ -85,6 +85,7 @@ class RoomAllocationController extends Controller
                                 }
                             }
                         }
+                        
 
                         // 3) For each paper, get subject_name and total students registered
                         //    (TH or P; here I count if either th_taking or p_taking is true)
@@ -128,9 +129,9 @@ class RoomAllocationController extends Controller
                         }
 
                         // 4) Total students in exam (all faculties, all semesters)
-                        $totalStudents = ExamRegistration::where('exam_id', $exam->id)
-                            ->where('batch', $batchNum)
-                            ->count();
+                           $totalStudents = array_sum(
+        array_column($papers, 'total_students')
+    );
 
                         // 5) Existing allocations for this exam + date
                         $allocations = RoomAllocation::where('exam_id', $exam->id)
@@ -157,17 +158,23 @@ class RoomAllocationController extends Controller
         }
 
         // sort papers by faculty code then subject code
-        if (!empty($papers)) {
-            $facMap = $faculties->keyBy('id');
-            uasort($papers, function ($a, $b) use ($facMap) {
-                $fa = strtoupper($facMap[$a['faculty_id']]->code ?? '');
-                $fb = strtoupper($facMap[$b['faculty_id']]->code ?? '');
-                if ($fa === $fb) {
-                    return strcmp($a['subject_code'], $b['subject_code']);
-                }
-                return strcmp($fa, $fb);
-            });
+     // sort papers by faculty custom order, then by subject_code
+if (!empty($papers)) {
+    // $faculties is already in correct order from codeOrder()
+    $facOrder = $faculties->pluck('id')->values()->flip(); 
+    // example: [3 => 0, 5 => 1, 2 => 2, ...]
+
+    uasort($papers, function ($a, $b) use ($facOrder) {
+        $posA = $facOrder[$a['faculty_id']] ?? 999;
+        $posB = $facOrder[$b['faculty_id']] ?? 999;
+
+        if ($posA === $posB) {
+            return strcmp($a['subject_code'], $b['subject_code']);
         }
+        return $posA <=> $posB;
+    });
+}
+
 
         return view('Backend.admin.room_allocations.index', compact(
             'exams',

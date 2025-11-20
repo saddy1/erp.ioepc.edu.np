@@ -77,24 +77,28 @@ Route::group(['middleware' => 'admin.auth'], function () {
 
         Route::post('seat-plans/download-seat-plan', [SeatPlanController::class, 'downloadSeatPlan'])->name('seat_plans.download_seat_plan');
 
-                Route::get('seat-plans/download-seat-plan', [SeatPlanController::class, 'index'])->name('seat_plans.download_seat_plan');
+        Route::get('seat-plans/download-seat-plan', [SeatPlanController::class, 'index'])->name('seat_plans.download_seat_plan');
 
         Route::post('seat-plans/download-attendance', [SeatPlanController::class, 'downloadAttendanceSheets'])->name('seat_plans.download_attendance');
-                Route::get('seat-plans/download-attendance', [SeatPlanController::class, 'index'])->name('seat_plans.download_attendance');
+        Route::get('seat-plans/download-attendance', [SeatPlanController::class, 'index'])->name('seat_plans.download_attendance');
 
 
         Route::post('seat-plans/print-attendance', [SeatPlanController::class, 'printAttendanceSheets'])->name('seat_plans.print_attendance');
-                Route::get('seat-plans/print-attendance', [SeatPlanController::class, 'index'])->name('seat_plans.print_attendance');
+        Route::get('seat-plans/print-attendance', [SeatPlanController::class, 'index'])->name('seat_plans.print_attendance');
 
 
         Route::post('seat-plans/print-seat-plan', [SeatPlanController::class, 'printSeatPlan'])->name('seat_plans.print_seat_plan');
         Route::get('seat-plans/print-seat-plan', [SeatPlanController::class, 'index'])->name('seat_plans.print_seat_plan');
 
         Route::get('rooms/exam-seat-plan', [RoomController::class, 'examSeatPlan'])
-    ->name('rooms.exam_seat_plan');
+            ->name('rooms.exam_seat_plan');
 
-Route::get('rooms/exam-seat-plan/print', [RoomController::class, 'examSeatPlanPrint'])
-    ->name('rooms.exam_seat_plan.print');
+        Route::get('rooms/exam-seat-plan/print', [RoomController::class, 'examSeatPlanPrint'])
+            ->name('rooms.exam_seat_plan.print');
+        Route::post(
+            '/admin/seat-plans/invigilators/print',
+            [SeatPlanController::class, 'printInvigilatorMap']
+        )->name('seat_plans.print_invigilators');
     });
 
     Route::get('faculty-subjects', [FacultySubjectController::class, 'index'])->name('faculty_subjects.index');

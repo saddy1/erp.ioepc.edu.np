@@ -37,22 +37,11 @@
             font-size: 12px;
         }
         
-        .text-center { 
-            text-align: center; 
-        }
-        
-        .mb-2 { 
-            margin-bottom: 12px; 
-        }
-        
-        .mb-4 { 
-            margin-bottom: 25px; 
-        }
-        
-        .bold { 
-            font-weight: 700; 
-        }
-        
+        .text-center { text-align: center; }
+        .mb-2 { margin-bottom: 12px; }
+        .mb-4 { margin-bottom: 25px; }
+        .bold { font-weight: 700; }
+
         /* Header Styles */
         .header-container {
             text-align: center;
@@ -73,32 +62,36 @@
             font-size: 15px;
             color: #555;
         }
-        
-        /* Summary Table */
+
+        /* Summary table — keep same */
         .summary-table th {
             background-color: #e8e8e8;
         }
-        
         .summary-table .total-row {
             background-color: #f9f9f9;
             font-weight: 700;
         }
-        
-        /* Room Table */
+
+        /* ======================= ROOM WISE LIST — BIGGER FONT ======================= */
+        .room-table th,
         .room-table td {
-            vertical-align: top;
+            font-size: 14px !important;
+            padding: 8px 10px !important;
         }
-        
-        .room-table .room-total-row {
-            background-color: #f0f0f0;
-            font-weight: 700;
-        }
-        
+
         .roll-numbers {
-            line-height: 1.6;
+            font-size: 14px !important;
+            line-height: 1.8 !important;
             word-wrap: break-word;
         }
-        
+
+        .room-total-row td {
+            background-color: #f0f0f0;
+            font-size: 15px !important;
+            font-weight: 700 !important;
+        }
+        /* ========================================================================== */
+
         /* Print Styles */
         @media print {
             body {
@@ -110,13 +103,8 @@
                 page-break-inside: auto;
             }
             
-            thead {
-                display: table-header-group;
-            }
-            
-            tr {
-                page-break-inside: avoid;
-            }
+            thead { display: table-header-group; }
+            tr { page-break-inside: avoid; }
             
             .header-container {
                 margin-bottom: 15px;
@@ -131,21 +119,26 @@
             .header-info {
                 font-size: 12px;
             }
-            
-            th, td {
-                padding: 6px 8px;
-                font-size: 11px;
+
+            /* Print version — slightly smaller but still bigger than before */
+            .room-table th,
+            .room-table td {
+                font-size: 12px !important;
+                padding: 6px 8px !important;
             }
-            
-            th {
-                font-size: 11px;
+
+            .roll-numbers {
+                font-size: 12px !important;
+                line-height: 1.6 !important;
             }
-            
-            .mb-4 {
-                margin-bottom: 15px;
+
+            .room-total-row td {
+                font-size: 13px !important;
             }
+
+            .mb-4 { margin-bottom: 15px; }
         }
-        
+
         @page {
             size: A4;
             margin: 1cm;
@@ -172,7 +165,7 @@
         <p class="text-center" style="font-size: 16px; padding: 20px;">No data to display.</p>
     @else
 
-        {{-- ================= TOP SUMMARY TABLE (PROGRAMME / SUBJECT / REGULAR / BACK) ================= --}}
+        {{-- ================= SUMMARY TABLE ================= --}}
         @php
             $sumRegular = collect($summaryRows ?? [])->sum('regular');
             $sumBack    = collect($summaryRows ?? [])->sum('back');
@@ -180,47 +173,47 @@
         @endphp
 
         @if(!empty($summaryRows))
-            <table class="summary-table mb-4">
-                <thead>
-                    <tr>
-                        <th style="width: 50px;">S.N.</th>
-                        <th style="width: 200px;">Programme</th>
-                        <th style="width: 80px;">Semester</th>
-                        <th>Subject</th>
-                        <th style="width: 80px;">Regular</th>
-                        <th style="width: 80px;">Back</th>
-                        <th style="width: 80px;">Total</th>
-                        <th style="width: 120px;">Remarks</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach($summaryRows as $idx => $row)
-                        <tr>
-                            <td class="text-center">{{ $idx + 1 }}</td>
-                            <td>{{ $row['programme'] ?? '' }}</td>
-                            <td class="text-center">{{ $row['semester'] ?? '' }}</td>
-                            <td>{{ $row['subject'] ?? '' }}</td>
-                            <td class="text-center">{{ $row['regular'] ?? 0 }}</td>
-                            <td class="text-center">{{ $row['back'] ?? 0 }}</td>
-                            <td class="text-center">{{ $row['total'] ?? 0 }}</td>
-                            <td>{{ $row['remarks'] ?? '' }}</td>
-                        </tr>
-                    @endforeach
-                    {{-- Total row --}}
-                    <tr class="total-row">
-                        <td></td>
-                        <td class="bold text-center">TOTAL</td>
-                        <td></td>
-                        <td></td>
-                        <td class="text-center bold">{{ $sumRegular }}</td>
-                        <td class="text-center bold">{{ $sumBack }}</td>
-                        <td class="text-center bold">{{ $sumTotal }}</td>
-                        <td></td>
-                    </tr>
-                </tbody>
-            </table>
+           <table class="summary-table mb-4">
+    <thead>
+        <tr>
+            <th>S.N.</th>
+            <th>Programme</th>
+            <th>Semester</th>
+            <th>Subject</th>
+            <th>Back</th>
+            <th>Regular</th>
+            <th>Total</th>
+            <th>Remarks</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach($summaryRows as $idx => $row)
+            <tr>
+                <td class="text-center">{{ $idx + 1 }}</td>
+                <td>{{ $row['programme'] ?? '' }}</td>
+                <td class="text-center">{{ $row['semester'] ?? '' }}</td>
+                <td>{{ $row['subject'] ?? '' }}</td>
+                <td class="text-center">{{ $row['back'] ?? 0 }}</td>
+                <td class="text-center">{{ $row['regular'] ?? 0 }}</td>
+                <td class="text-center">{{ $row['total'] ?? 0 }}</td>
+                <td>{{ $row['remarks'] ?? '' }}</td>
+            </tr>
+        @endforeach
+
+        <tr class="total-row">
+            <td></td>
+            <td class="bold text-center">TOTAL</td>
+            <td></td>
+            <td></td>
+            <td class="text-center bold">{{ $sumRegular }}</td>
+            <td class="text-center bold">{{ $sumBack }}</td>
+            <td class="text-center bold">{{ $sumTotal }}</td>
+            <td></td>
+        </tr>
+    </tbody>
+</table>
+
         @endif
-        {{-- ================= END TOP SUMMARY TABLE ================= --}}
 
         {{-- ================= ROOM-WISE ROLL LIST ================= --}}
         <table class="room-table">
@@ -253,16 +246,16 @@
                             <td class="text-center"><strong>{{ $row['total'] }}</strong></td>
                         </tr>
                     @endforeach
+
                     <tr class="room-total-row">
-                        <td colspan="3" class="text-center bold">
-                            ROOM {{ $room->room_no }} TOTAL
-                        </td>
+                        <td colspan="3" class="text-center bold">ROOM {{ $room->room_no }} TOTAL</td>
                         <td class="text-center bold">{{ $info['room_total'] }}</td>
                     </tr>
+
                 @endforeach
             </tbody>
         </table>
-        {{-- ================= END ROOM-WISE ROLL LIST ================= --}}
+
     @endif
 </body>
 </html>

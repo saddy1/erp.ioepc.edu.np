@@ -9,7 +9,7 @@ use Illuminate\Http\Request;
 class FacultyController extends Controller
 {
   public function index(){
-    $faculties = Faculty::orderBy('code')->paginate(20);
+    $faculties = Faculty::codeOrder()->paginate(20);
     return view('Backend.admin.faculties.index', compact('faculties'));
   }
   public function create(){ return view('Backend.admin.faculties.create'); }

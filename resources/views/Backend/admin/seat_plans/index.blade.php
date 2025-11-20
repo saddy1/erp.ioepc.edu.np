@@ -69,8 +69,8 @@
                     </div>
                 @endif
 
-                {{-- Invigilator selection (only when NOT already stored) --}}
-                @if ($examId && $examDate && $hasData && !$hasSavedInvigilators)
+                {{-- Invigilator selection (ALWAYS visible when we have data) --}}
+                @if ($examId && $examDate && $hasData)
                     <div class="border-t pt-3">
                         <label class="block text-[10px] font-medium text-gray-700 mb-2">
                             Invigilators (Employees) <span class="text-gray-500">(click to select/deselect)</span>
@@ -171,23 +171,6 @@
             {{-- PDF actions (always visible once we have data) --}}
             @if ($examId && $examDate && $hasData)
                 <div class="mt-3 pt-3 border-t flex flex-wrap gap-2">
-                    {{-- Download Seat Plan (Landscape) --}}
-                    {{-- <form method="POST" action="{{ route('seat_plans.download_seat_plan') }}" class="inline">
-                        @csrf
-                        <input type="hidden" name="exam_id" value="{{ $examId }}">
-                        <input type="hidden" name="exam_date" value="{{ $examDate }}">
-                        <input type="hidden" name="batch" value="{{ $batch }}">
-                        <input type="hidden" name="employee_ids_json" value="{{ json_encode($employeeIds) }}">
-                        <button type="submit"
-                            class="rounded-lg bg-indigo-600 text-white px-4 py-2 text-xs font-semibold hover:bg-indigo-700 flex items-center gap-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                      d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
-                            Download Seat Plan
-                        </button>
-                    </form> --}}
-
                     {{-- Print Seat Plan (Landscape) --}}
                     <form method="POST" action="{{ route('seat_plans.print_seat_plan') }}" class="inline" target="_blank">
                         @csrf
@@ -204,24 +187,6 @@
                             Print Seat Plan
                         </button>
                     </form>
-                    
-
-                    {{-- Download Attendance Sheets --}}
-                    {{-- <form method="POST" action="{{ route('seat_plans.download_attendance') }}" class="inline">
-                        @csrf
-                        <input type="hidden" name="exam_id" value="{{ $examId }}">
-                        <input type="hidden" name="exam_date" value="{{ $examDate }}">
-                        <input type="hidden" name="batch" value="{{ $batch }}">
-                        <input type="hidden" name="employee_ids_json" value="{{ json_encode($employeeIds) }}">
-                        <button type="submit"
-                            class="rounded-lg bg-slate-600 text-white px-4 py-2 text-xs font-semibold hover:bg-slate-700 flex items-center gap-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                            </svg>
-                            Download Attendance Sheets
-                        </button>
-                    </form> --}}
 
                     {{-- Print Attendance Sheets --}}
                     <form method="POST" action="{{ route('seat_plans.print_attendance') }}" class="inline" target="_blank">
@@ -239,15 +204,30 @@
                             Print Attendance Sheets
                         </button>
                     </form>
-                   
-            <a href="{{ route('rooms.exam_seat_plan.print', ['exam_id' => $examId, 'exam_date' => $examDate, 'batch' => $batch]) }}"
-               target="_blank"
-               class="inline-flex items-center rounded-lg bg-gray-900 text-white px-3 py-2 text-[11px] font-semibold hover:bg-gray-800">
-                Print Sheet
-            </a>
-  
+
+                    <a href="{{ route('rooms.exam_seat_plan.print', ['exam_id' => $examId, 'exam_date' => $examDate, 'batch' => $batch]) }}"
+                       target="_blank"
+                       class="inline-flex items-center rounded-lg bg-gray-900 text-white px-3 py-2 text-[11px] font-semibold hover:bg-gray-800">
+                        Print Sheet
+                    </a>
+                    {{-- Print Invigilator Sheet --}}
+<form method="POST" action="{{ route('seat_plans.print_invigilators') }}" class="inline" target="_blank">
+    @csrf
+    <input type="hidden" name="exam_id" value="{{ $examId }}">
+    <input type="hidden" name="exam_date" value="{{ $examDate }}">
+    <input type="hidden" name="batch" value="{{ $batch }}">
+    <input type="hidden" name="employee_ids_json" value="{{ json_encode($employeeIds) }}">
+    <button type="submit"
+        class="rounded-lg bg-indigo-600 text-white px-4 py-2 text-xs font-semibold hover:bg-indigo-700 flex items-center gap-2">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M4 4v6h6M20 20v-6h-6M4 10l6-6m4 16l6-6"/>
+        </svg>
+        Print Invigilator Sheet
+    </button>
+</form>
+
                 </div>
-                
             @endif
         </div>
 
@@ -409,7 +389,6 @@
             const facultyEl = document.getElementById('facultyCount');
             const staffEl = document.getElementById('staffCount');
 
-            // If the invigilator block is hidden (already saved), do nothing
             if (!totalEl || !facultyEl || !staffEl) return;
 
             const checkboxes = document.querySelectorAll('.employee-checkbox');

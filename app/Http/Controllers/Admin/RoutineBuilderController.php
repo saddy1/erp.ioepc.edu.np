@@ -46,7 +46,7 @@ class RoutineBuilderController extends Controller
 
             $batchNum    = $exam->batch === 'new' ? 1 : 2;
             $allowedSems = Exam::semesterNumbers($exam->semester);
-            $faculties   = Faculty::orderBy('code')->get(['id','name','code']);
+$faculties   = Faculty::codeOrder()->get(['id','name','code']);
 
             if ($selectedSemester && in_array($selectedSemester, $allowedSems, true)) {
                 // Load existing slots and their subjects for this exam_title + batch + semester

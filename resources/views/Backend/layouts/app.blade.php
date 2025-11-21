@@ -142,12 +142,14 @@
                             <i class="fas fa-calendar-alt w-5 text-gray-300"></i><span>Routines</span>
                         </a>
                     </li>
-
-                    <li>
-                        <a href="{{ route('seat_plans.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
-                            <i class="fas fa-door-open w-5 text-gray-300"></i><span>Seatplan</span>
-                        </a>
-                    </li>
+                  
+                    @if(!empty($admin) && ($admin->is_super_admin ?? false))
+                        <li>
+                            <a href="{{ route('seat_plans.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
+                                <i class="fas fa-door-open w-5 text-gray-300"></i><span>Seatplan</span>
+                            </a>
+                        </li>
+                    @endif
 
                   
 

@@ -70,6 +70,8 @@ Route::group(['middleware' => 'admin.auth'], function () {
             ->name('room_allocations.index');
         Route::post('/admin/room-allocations', [RoomAllocationController::class, 'store'])
             ->name('room_allocations.store');
+                Route::get('/room-allocations/print', [RoomAllocationController::class, 'printPdf'])
+        ->name('room_allocations.print');
 
 
         Route::get('seat-plans', [SeatPlanController::class, 'index'])

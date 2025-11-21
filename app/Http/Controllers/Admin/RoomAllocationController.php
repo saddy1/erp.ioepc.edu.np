@@ -16,6 +16,8 @@ use App\Models\{
     RoomAllocation
 };
 use Illuminate\Support\Facades\DB;
+use Barryvdh\DomPDF\Facade\Pdf;   // ✅ add this
+
 use Illuminate\Validation\ValidationException;
 
 class RoomAllocationController extends Controller
@@ -399,4 +401,181 @@ if (!empty($papers)) {
             'batch'     => $batch,
         ])->with('ok', 'Room allocation saved successfully.');
     }
+    public function printPdf(Request $r)
+{
+    $data = $r->validate([
+        'exam_id'   => 'required|integer|exists:exams,id',
+        'exam_date' => 'required|string',
+        'batch'     => 'required|in:1,2',
+    ]);
+
+    $examId   = (int) $data['exam_id'];
+    $examDate = trim($data['exam_date']);
+    $batch    = (int) $data['batch'];
+
+    $exam = Exam::findOrFail($examId);
+    $batchNum = $exam->batch === 'new' ? 1 : 2;
+    if ($batch !== $batchNum) {
+        throw ValidationException::withMessages([
+            'batch' => ['Batch mismatch for selected exam.'],
+        ]);
+    }
+
+    // Ensure this date is valid for this exam
+    $dateExists = RoutineSlot::where('exam_title', $exam->exam_title)
+        ->where('batch', $batch)
+        ->where('exam_date', $examDate)
+        ->exists();
+
+    if (! $dateExists) {
+        throw ValidationException::withMessages([
+            'exam_date' => ['Invalid exam date for this exam.'],
+        ]);
+    }
+
+    // Faculties (for code/name display)
+    $faculties = Faculty::codeOrder()->get(['id','name','code'])->keyBy('id');
+
+    // Rebuild "papers" and allocations (almost same as index())
+    $slots = RoutineSlot::where('exam_title', $exam->exam_title)
+        ->where('batch', $batch)
+        ->where('exam_date', $examDate)
+        ->with('subjects')
+        ->get();
+
+    if ($slots->isEmpty()) {
+        throw ValidationException::withMessages([
+            'exam_date' => ['No routine slots found for this exam & date.'],
+        ]);
+    }
+
+    // 1) Build paper map
+    $paperMap = []; // key => ['faculty_id','subject_code','semester']
+    foreach ($slots as $slot) {
+        foreach ($slot->subjects as $sub) {
+            $key = $sub->faculty_id.'|'.$sub->subject_code;
+            if (!isset($paperMap[$key])) {
+                $paperMap[$key] = [
+                    'faculty_id'   => $sub->faculty_id,
+                    'subject_code' => $sub->subject_code,
+                    'semester'     => $slot->semester,
+                ];
+            }
+        }
+    }
+
+    // 2) Build papers with subject_name + total_students
+    $papers = [];
+    $totalStudents = 0;
+    $batchNum = $batch; // alias
+
+    foreach ($paperMap as $key => $info) {
+        $fid  = $info['faculty_id'];
+        $code = $info['subject_code'];
+        $sem  = $info['semester'];
+
+        $fss = FacultySemesterSubject::where('faculty_id', $fid)
+            ->where('semester', $sem)
+            ->where('batch', $batchNum)
+            ->where('subject_code', $code)
+            ->with('subject')
+            ->first();
+
+        $subjectName = $fss?->subject?->name ?? $code;
+
+        $totalForPaper = ExamRegistrationSubject::query()
+            ->where('subject_code', $code)
+            ->whereHas('registration', function ($q) use ($exam, $sem, $batchNum, $fid) {
+                $q->where('exam_id', $exam->id)
+                  ->where('semester', $sem)
+                  ->where('batch', $batchNum)
+                  ->where('faculty_id', $fid);
+            })
+            ->where(function ($q) {
+                $q->where('th_taking', 1)
+                  ->orWhere('p_taking', 1);
+            })
+            ->count();
+
+        $papers[$key] = [
+            'faculty_id'     => $fid,
+            'subject_code'   => $code,
+            'subject_name'   => $subjectName,
+            'semester'       => $sem,
+            'total_students' => $totalForPaper,
+        ];
+
+        $totalStudents += $totalForPaper;
+    }
+
+    // 3) Existing allocations
+    $allocations = RoomAllocation::where('exam_id', $exam->id)
+        ->where('exam_date', $examDate)
+        ->get();
+
+    $allocByRoom   = []; // [room_id][paperKey] = count
+    $totalsByRoom  = []; // [room_id] => total
+    $totalsByPaper = []; // [paperKey] => total
+
+    foreach ($allocations as $a) {
+        $pKey = $a->faculty_id.'|'.$a->subject_code;
+
+        if (!isset($allocByRoom[$a->room_id])) {
+            $allocByRoom[$a->room_id] = [];
+        }
+        $allocByRoom[$a->room_id][$pKey] = (int) $a->student_count;
+
+        if (!isset($totalsByRoom[$a->room_id])) {
+            $totalsByRoom[$a->room_id] = 0;
+        }
+        $totalsByRoom[$a->room_id] += (int) $a->student_count;
+
+        if (!isset($totalsByPaper[$pKey])) {
+            $totalsByPaper[$pKey] = 0;
+        }
+        $totalsByPaper[$pKey] += (int) $a->student_count;
+    }
+
+    // 4) Only rooms that actually have allocations
+    $roomIds = array_keys($allocByRoom);
+    $rooms = Room::whereIn('id', $roomIds)
+        ->orderBy('room_no')
+        ->get();
+
+    // 5) Sort papers by faculty custom order, then subject_code
+    if (!empty($papers)) {
+        $facOrder = $faculties->pluck('id')->values()->flip();
+        uasort($papers, function ($a, $b) use ($facOrder) {
+            $posA = $facOrder[$a['faculty_id']] ?? 999;
+            $posB = $facOrder[$b['faculty_id']] ?? 999;
+
+            if ($posA === $posB) {
+                return strcmp($a['subject_code'], $b['subject_code']);
+            }
+            return $posA <=> $posB;
+        });
+    }
+
+    // 6) Render PDF
+   // 6) Render PDF
+$pdf = Pdf::loadView('Backend.admin.room_allocations.print', [
+    'exam'          => $exam,
+    'examDate'      => $examDate,    // keep original for display
+    'batch'         => $batch,
+    'rooms'         => $rooms,
+    'faculties'     => $faculties,
+    'papers'        => $papers,
+    'allocByRoom'   => $allocByRoom,
+    'totalsByRoom'  => $totalsByRoom,
+    'totalsByPaper' => $totalsByPaper,
+    'totalStudents' => $totalStudents,
+])->setPaper('A4', 'landscape');
+$safeDate  = str_replace(['/', '\\'], '-', $examDate);
+$fileName = 'room-plan-'.$exam->id.'-'.$safeDate.'.pdf';
+
+
+return $pdf->stream($fileName);
+
+}
+
 }

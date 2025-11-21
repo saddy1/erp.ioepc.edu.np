@@ -12,7 +12,7 @@ class Admin extends Model
 use HasFactory;
 
 
-protected $fillable = ['name','email','password','contact'];
+protected $fillable = ['name','email','password','contact','is_super_admin'];
 
 
 protected $hidden = ['password'];

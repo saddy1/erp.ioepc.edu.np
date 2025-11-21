@@ -15,6 +15,7 @@ class AdminSeeder extends Seeder
                 'name' => 'Sadanand Paneru',
                 'password' => bcrypt('S@ddy9843'),
                 'contact' => '9843521965',
+                'is_super_admin' => true,
             ]
         );
         Admin::updateOrCreate(
@@ -23,6 +24,7 @@ class AdminSeeder extends Seeder
             'name' => 'Purwanchal Campus',
             'password' => bcrypt('Admin@ioepc123'),
             'contact' => '9843521965',
+
         ]
     );
     }

@@ -13,6 +13,7 @@ $table->string('name');
 $table->string('email')->unique();
 $table->string('password');
 $table->string('contact')->nullable();
+$table->boolean('is_super_admin')->default(false);
 $table->timestamps();
 });
 }

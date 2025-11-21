@@ -182,14 +182,15 @@
                             class="rounded-lg bg-blue-600 text-white px-4 py-2 text-xs font-semibold hover:bg-blue-700 flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                      d="M6 9V4h12v5m0 4v5H6v-5m0-4h12M9 17h6"/>
+                                    d="M6 9V4h12v5m0 4v5H6v-5m0-4h12M9 17h6" />
                             </svg>
                             Print Seat Plan
                         </button>
                     </form>
 
                     {{-- Print Attendance Sheets --}}
-                    <form method="POST" action="{{ route('seat_plans.print_attendance') }}" class="inline" target="_blank">
+                    <form method="POST" action="{{ route('seat_plans.print_attendance') }}" class="inline"
+                        target="_blank">
                         @csrf
                         <input type="hidden" name="exam_id" value="{{ $examId }}">
                         <input type="hidden" name="exam_date" value="{{ $examDate }}">
@@ -199,33 +200,34 @@
                             class="rounded-lg bg-emerald-600 text-white px-4 py-2 text-xs font-semibold hover:bg-emerald-700 flex items-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                      d="M6 9V4h12v5m0 4v5H6v-5m0-4h12M9 17h6"/>
+                                    d="M6 9V4h12v5m0 4v5H6v-5m0-4h12M9 17h6" />
                             </svg>
                             Print Attendance Sheets
                         </button>
                     </form>
 
                     <a href="{{ route('rooms.exam_seat_plan.print', ['exam_id' => $examId, 'exam_date' => $examDate, 'batch' => $batch]) }}"
-                       target="_blank"
-                       class="inline-flex items-center rounded-lg bg-gray-900 text-white px-3 py-2 text-[11px] font-semibold hover:bg-gray-800">
+                        target="_blank"
+                        class="inline-flex items-center rounded-lg bg-gray-900 text-white px-3 py-2 text-[11px] font-semibold hover:bg-gray-800">
                         Print Sheet
                     </a>
                     {{-- Print Invigilator Sheet --}}
-<form method="POST" action="{{ route('seat_plans.print_invigilators') }}" class="inline" target="_blank">
-    @csrf
-    <input type="hidden" name="exam_id" value="{{ $examId }}">
-    <input type="hidden" name="exam_date" value="{{ $examDate }}">
-    <input type="hidden" name="batch" value="{{ $batch }}">
-    <input type="hidden" name="employee_ids_json" value="{{ json_encode($employeeIds) }}">
-    <button type="submit"
-        class="rounded-lg bg-indigo-600 text-white px-4 py-2 text-xs font-semibold hover:bg-indigo-700 flex items-center gap-2">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M4 4v6h6M20 20v-6h-6M4 10l6-6m4 16l6-6"/>
-        </svg>
-        Print Invigilator Sheet
-    </button>
-</form>
+                    <form method="POST" action="{{ route('seat_plans.print_invigilators') }}" class="inline"
+                        target="_blank">
+                        @csrf
+                        <input type="hidden" name="exam_id" value="{{ $examId }}">
+                        <input type="hidden" name="exam_date" value="{{ $examDate }}">
+                        <input type="hidden" name="batch" value="{{ $batch }}">
+                        <input type="hidden" name="employee_ids_json" value="{{ json_encode($employeeIds) }}">
+                        <button type="submit"
+                            class="rounded-lg bg-indigo-600 text-white px-4 py-2 text-xs font-semibold hover:bg-indigo-700 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 4v6h6M20 20v-6h-6M4 10l6-6m4 16l6-6" />
+                            </svg>
+                            Print Invigilator Sheet
+                        </button>
+                    </form>
 
                 </div>
             @endif

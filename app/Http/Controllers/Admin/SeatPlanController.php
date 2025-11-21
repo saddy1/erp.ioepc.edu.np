@@ -95,10 +95,12 @@ class SeatPlanController extends Controller
 
                 // Allocations for this exam + date
                 $allocations = RoomAllocation::where('exam_id', $exam->id)
-                    ->where('exam_date', $examDate)
-                    ->orderBy('room_id')
-                    ->get();
-
+    ->where('exam_date', $examDate)
+    ->orderBy('room_id')
+    ->orderBy('faculty_id')      // Add this
+    ->orderBy('subject_code')    // Add this
+    ->orderBy('id')              // Fallback tie-breaker
+    ->get();
                 if ($allocations->isNotEmpty()) {
                     $hasData = true;
 
@@ -802,9 +804,12 @@ class SeatPlanController extends Controller
 
     // Get allocations for this exam + date
     $allocations = RoomAllocation::where('exam_id', $exam->id)
-        ->where('exam_date', $examDate)
-        ->orderBy('room_id')
-        ->get();
+    ->where('exam_date', $examDate)
+    ->orderBy('room_id')
+    ->orderBy('faculty_id')      // Add this
+    ->orderBy('subject_code')    // Add this
+    ->orderBy('id')              // Fallback tie-breaker
+    ->get();
 
     if ($allocations->isEmpty()) {
         return ['hasData' => false];

@@ -29,6 +29,7 @@ class RoomAllocation extends Model
         'faculty_id',
         'subject_code',
         'student_count',
+        'invigilator_count',
         'invigilator_assignments',
     ];
 
@@ -42,6 +43,7 @@ class RoomAllocation extends Model
         'room_id' => 'integer',
         'faculty_id' => 'integer',
         'student_count' => 'integer',
+        'invigilator_count' => 'integer',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
          'invigilator_assignments' => 'array',

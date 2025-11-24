@@ -27,6 +27,7 @@ return new class extends Migration
             
             // Number of students allocated
             $table->integer('student_count')->default(0);
+            $table->unsignedSmallInteger('invigilator_count');
             
             $table->timestamps();
             

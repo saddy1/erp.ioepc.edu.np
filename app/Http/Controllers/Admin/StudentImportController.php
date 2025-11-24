@@ -14,6 +14,7 @@ use App\Models\{
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\Log;
 
 class StudentImportController extends Controller
 {
@@ -55,7 +56,7 @@ class StudentImportController extends Controller
         $data = $r->validate([
             'exam_id'   => 'required|exists:exams,id',
             'semester'  => 'required|integer|min:1|max:12',
-            'faculty_id'=> 'nullable|exists:faculties,id',
+            'faculty_id' => 'nullable|exists:faculties,id',
             'file'      => 'required|file|mimes:csv,txt',
             'assume_practical_from_columns' => 'nullable|boolean',
         ]);
@@ -81,7 +82,7 @@ class StudentImportController extends Controller
             ->get(['id', 'faculty_id', 'subject_id', 'subject_code', 'semester']);
 
         // Create lookup map: "faculty_id:subject_code" => FacultySemesterSubject
-        $fssLookup = $fss->mapWithKeys(function($item) {
+        $fssLookup = $fss->mapWithKeys(function ($item) {
             return [$item->faculty_id . ':' . $item->subject_code => $item];
         });
 
@@ -213,7 +214,7 @@ class StudentImportController extends Controller
         foreach ($csvSubjectCodes as $code) {
             // Check if this subject exists for ANY faculty in this semester/batch
             $existsInSemester = $fss->where('subject_code', $code)->isNotEmpty();
-            
+
             if (!$existsInSemester) {
                 $missingSubjects[] = $code;
             }
@@ -293,9 +294,15 @@ class StudentImportController extends Controller
                     ->first();
 
                 if ($existingReg) {
-                    // Skip - already registered, don't track
-                    continue;
+                    throw ValidationException::withMessages([
+                        'file' => [
+                            "Student {$campusRoll} ({$name}) is already registered for "
+                                . "Exam \"{$exam->exam_title}\", Semester {$semester}. "
+                                . "Please remove them from the CSV or delete the existing registration first."
+                        ]
+                    ]);
                 }
+
 
                 /**
                  * Create NEW ExamRegistration
@@ -342,11 +349,11 @@ class StudentImportController extends Controller
                     // Look up FSS using BOTH faculty_id AND subject_code
                     $fssId        = null;
                     $hasPractical = false;
-                    
+
                     if ($facultyId) {
                         $lookupKey = $facultyId . ':' . $code;
                         $found = $fssLookup->get($lookupKey);
-                        
+
                         if ($found) {
                             $fssId        = $found->id;
                             $hasPractical = (bool) optional($found->subject)->has_practical;
@@ -380,16 +387,16 @@ class StudentImportController extends Controller
             return back()->with('ok', $message);
         } catch (\Throwable $e) {
             DB::rollBack();
-            
-            // Don't show SQL errors to user
-            \Log::error('Student Import Failed: ' . $e->getMessage(), [
-                'file' => $e->getFile(),
-                'line' => $e->getLine(),
+
+            Log::error('Student Import Failed: ' . $e->getMessage(), [
+                'file'  => $e->getFile(),
+                'line'  => $e->getLine(),
                 'trace' => $e->getTraceAsString()
             ]);
 
+            // TEMP: show the real message on screen
             throw ValidationException::withMessages([
-                'file' => ['Import failed. Please check that all subjects are properly configured for this semester and batch, and that your CSV format is correct.']
+                'file' => ['Import failed: ' . $e->getMessage()],
             ]);
         }
     }
@@ -412,7 +419,7 @@ class StudentImportController extends Controller
         $lines[] = "Semester: {$semester} | Batch: {$batch}";
         $lines[] = "";
         $lines[] = "IMPORTED STUDENTS:";
-        
+
         foreach ($imported as $examRoll => $info) {
             $lines[] = "  • {$examRoll} — {$info['name']} (Campus: {$info['campus_roll']})";
         }

@@ -6,7 +6,8 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration {
-  public function up(): void {
+  public function up(): void
+  {
     Schema::create('exam_registrations', function (Blueprint $t) {
       $t->id();
       $t->foreignId('exam_id')->constrained('exams')->cascadeOnDelete();
@@ -19,9 +20,12 @@ return new class extends Migration {
       $t->integer('amount')->default(0);
       $t->timestamps();
 
-      $t->unique(['exam_id','student_id'], 'uniq_exam_student');
-      $t->index(['exam_id','faculty_id','semester','batch']);
+      $t->unique(['exam_id', 'student_id', 'semester'], 'uniq_exam_student');
+      $t->index(['exam_id', 'faculty_id', 'semester', 'batch']);
     });
   }
-  public function down(): void { Schema::dropIfExists('exam_registrations'); }
+  public function down(): void
+  {
+    Schema::dropIfExists('exam_registrations');
+  }
 };

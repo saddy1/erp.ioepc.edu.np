@@ -34,10 +34,10 @@ class RoomAllocationController extends Controller
         // Exams (you can choose status=0 or 1; here I use status=0: upcoming)
         $exams = Exam::where('status', 0)
             ->orderByDesc('id')
-            ->get(['id','exam_title','semester','batch']);
+            ->get(['id', 'exam_title', 'semester', 'batch']);
 
         $rooms     = Room::orderBy('room_no')->get();
-$faculties = Faculty::codeOrder()->get(['id','name','code']);
+        $faculties = Faculty::codeOrder()->get(['id', 'name', 'code']);
 
         $exam           = null;
         $examDates      = []; // Available exam dates for selected exam
@@ -47,6 +47,8 @@ $faculties = Faculty::codeOrder()->get(['id','name','code']);
         $allocByRoom    = []; // [room_id][paperKey] = count
         $totalsByRoom   = []; // [room_id] => sum across subjects
         $totalsByPaper  = []; // [paperKey] => sum across rooms
+        $invigilatorsByRoom = []; // [room_id] => invigilator_count
+
 
         if ($examId) {
             $exam = $exams->firstWhere('id', $examId);
@@ -77,7 +79,7 @@ $faculties = Faculty::codeOrder()->get(['id','name','code']);
                         $paperMap = []; // faculty_id|code => ['faculty_id'=>..,'subject_code'=>..,'semester'=>..]
                         foreach ($slots as $slot) {
                             foreach ($slot->subjects as $sub) {
-                                $key = $sub->faculty_id.'|'.$sub->subject_code;
+                                $key = $sub->faculty_id . '|' . $sub->subject_code;
                                 if (!isset($paperMap[$key])) {
                                     $paperMap[$key] = [
                                         'faculty_id'   => $sub->faculty_id,
@@ -87,7 +89,7 @@ $faculties = Faculty::codeOrder()->get(['id','name','code']);
                                 }
                             }
                         }
-                        
+
 
                         // 3) For each paper, get subject_name and total students registered
                         //    (TH or P; here I count if either th_taking or p_taking is true)
@@ -111,13 +113,13 @@ $faculties = Faculty::codeOrder()->get(['id','name','code']);
                                 ->where('subject_code', $code)
                                 ->whereHas('registration', function ($q) use ($exam, $sem, $batchNum, $fid) {
                                     $q->where('exam_id', $exam->id)
-                                      ->where('semester', $sem)
-                                      ->where('batch', $batchNum)
-                                      ->where('faculty_id', $fid);
+                                        ->where('semester', $sem)
+                                        ->where('batch', $batchNum)
+                                        ->where('faculty_id', $fid);
                                 })
                                 ->where(function ($q) {
                                     $q->where('th_taking', 1)
-                                      ->orWhere('p_taking', 1);
+                                        ->orWhere('p_taking', 1);
                                 })
                                 ->count();
 
@@ -131,17 +133,19 @@ $faculties = Faculty::codeOrder()->get(['id','name','code']);
                         }
 
                         // 4) Total students in exam (all faculties, all semesters)
-                           $totalStudents = array_sum(
-        array_column($papers, 'total_students')
-    );
+                        $totalStudents = array_sum(
+                            array_column($papers, 'total_students')
+                        );
 
                         // 5) Existing allocations for this exam + date
                         $allocations = RoomAllocation::where('exam_id', $exam->id)
                             ->where('exam_date', $examDate)
                             ->get();
 
+                        $invigilatorsByRoom = [];
+
                         foreach ($allocations as $a) {
-                            $pKey = $a->faculty_id.'|'.$a->subject_code;
+                            $pKey = $a->faculty_id . '|' . $a->subject_code;
                             $allocByRoom[$a->room_id][$pKey] = (int) $a->student_count;
 
                             if (!isset($totalsByRoom[$a->room_id])) {
@@ -153,6 +157,9 @@ $faculties = Faculty::codeOrder()->get(['id','name','code']);
                                 $totalsByPaper[$pKey] = 0;
                             }
                             $totalsByPaper[$pKey] += (int) $a->student_count;
+                            if ($a->invigilator_count !== null && !isset($invigilatorsByRoom[$a->room_id])) {
+                                $invigilatorsByRoom[$a->room_id] = (int) $a->invigilator_count;
+                            }
                         }
                     }
                 }
@@ -160,22 +167,22 @@ $faculties = Faculty::codeOrder()->get(['id','name','code']);
         }
 
         // sort papers by faculty code then subject code
-     // sort papers by faculty custom order, then by subject_code
-if (!empty($papers)) {
-    // $faculties is already in correct order from codeOrder()
-    $facOrder = $faculties->pluck('id')->values()->flip(); 
-    // example: [3 => 0, 5 => 1, 2 => 2, ...]
+        // sort papers by faculty custom order, then by subject_code
+        if (!empty($papers)) {
+            // $faculties is already in correct order from codeOrder()
+            $facOrder = $faculties->pluck('id')->values()->flip();
+            // example: [3 => 0, 5 => 1, 2 => 2, ...]
 
-    uasort($papers, function ($a, $b) use ($facOrder) {
-        $posA = $facOrder[$a['faculty_id']] ?? 999;
-        $posB = $facOrder[$b['faculty_id']] ?? 999;
+            uasort($papers, function ($a, $b) use ($facOrder) {
+                $posA = $facOrder[$a['faculty_id']] ?? 999;
+                $posB = $facOrder[$b['faculty_id']] ?? 999;
 
-        if ($posA === $posB) {
-            return strcmp($a['subject_code'], $b['subject_code']);
+                if ($posA === $posB) {
+                    return strcmp($a['subject_code'], $b['subject_code']);
+                }
+                return $posA <=> $posB;
+            });
         }
-        return $posA <=> $posB;
-    });
-}
 
 
         return view('Backend.admin.room_allocations.index', compact(
@@ -191,7 +198,8 @@ if (!empty($papers)) {
             'totalStudents',
             'allocByRoom',
             'totalsByRoom',
-            'totalsByPaper'
+            'totalsByPaper',
+            'invigilatorsByRoom'
         ));
     }
 
@@ -209,6 +217,8 @@ if (!empty($papers)) {
             'exam_date' => 'required|string',
             'batch'     => 'required|in:1,2',
             'alloc'     => 'nullable|array', // [room_id][paperKey] => int
+             'invigilators'   => 'nullable|array',            // 👈 NEW
+    'invigilators.*' => 'nullable|integer|min:0|max:10', // 👈 NEW (you can change max)
         ]);
 
         $examId   = (int) $data['exam_id'];
@@ -251,20 +261,20 @@ if (!empty($papers)) {
         $paperMap = []; // key => ['faculty_id','subject_code','semester','total_students']
         foreach ($slots as $slot) {
             foreach ($slot->subjects as $sub) {
-                $key = $sub->faculty_id.'|'.$sub->subject_code;
+                $key = $sub->faculty_id . '|' . $sub->subject_code;
                 if (!isset($paperMap[$key])) {
                     $sem = $slot->semester;
                     $totalForPaper = ExamRegistrationSubject::query()
                         ->where('subject_code', $sub->subject_code)
                         ->whereHas('registration', function ($q) use ($exam, $sem, $batch) {
                             $q->where('exam_id', $exam->id)
-                              ->where('semester', $sem)
-                              ->where('batch', $batch)
-                              ->whereNotNull('faculty_id');
+                                ->where('semester', $sem)
+                                ->where('batch', $batch)
+                                ->whereNotNull('faculty_id');
                         })
                         ->where(function ($q) {
                             $q->where('th_taking', 1)
-                              ->orWhere('p_taking', 1);
+                                ->orWhere('p_taking', 1);
                         })
                         ->count();
 
@@ -281,6 +291,7 @@ if (!empty($papers)) {
         // Room capacities
         $rooms      = Room::all()->keyBy('id');
         $allocInput = $data['alloc'] ?? [];
+        $invPerRoom  = $data['invigilators'] ?? [];   // 👈 NEW
 
         // Prepare sums
         $sumByRoom  = []; // [room_id] => total
@@ -360,6 +371,9 @@ if (!empty($papers)) {
                 if (!$rooms->has($roomId)) {
                     continue;
                 }
+                  $invCountForRoom = isset($invPerRoom[$roomId])
+        ? (int) $invPerRoom[$roomId]
+        : null;
                 foreach ($paperRow as $paperKey => $value) {
                     $value = (int) $value;
                     if ($value <= 0) continue;
@@ -376,6 +390,7 @@ if (!empty($papers)) {
                         'faculty_id'    => $paper['faculty_id'],
                         'subject_code'  => $paper['subject_code'],
                         'student_count' => $value,
+                         'invigilator_count' => $invCountForRoom,  // 👈 NEW
                         'created_at'    => now(),
                         'updated_at'    => now(),
                     ];
@@ -391,7 +406,7 @@ if (!empty($papers)) {
             DB::rollBack();
             report($e);
             throw ValidationException::withMessages([
-                'alloc' => ['Failed to save room allocations: '.$e->getMessage()],
+                'alloc' => ['Failed to save room allocations: ' . $e->getMessage()],
             ]);
         }
 
@@ -402,180 +417,178 @@ if (!empty($papers)) {
         ])->with('ok', 'Room allocation saved successfully.');
     }
     public function printPdf(Request $r)
-{
-    $data = $r->validate([
-        'exam_id'   => 'required|integer|exists:exams,id',
-        'exam_date' => 'required|string',
-        'batch'     => 'required|in:1,2',
-    ]);
-
-    $examId   = (int) $data['exam_id'];
-    $examDate = trim($data['exam_date']);
-    $batch    = (int) $data['batch'];
-
-    $exam = Exam::findOrFail($examId);
-    $batchNum = $exam->batch === 'new' ? 1 : 2;
-    if ($batch !== $batchNum) {
-        throw ValidationException::withMessages([
-            'batch' => ['Batch mismatch for selected exam.'],
+    {
+        $data = $r->validate([
+            'exam_id'   => 'required|integer|exists:exams,id',
+            'exam_date' => 'required|string',
+            'batch'     => 'required|in:1,2',
         ]);
-    }
 
-    // Ensure this date is valid for this exam
-    $dateExists = RoutineSlot::where('exam_title', $exam->exam_title)
-        ->where('batch', $batch)
-        ->where('exam_date', $examDate)
-        ->exists();
+        $examId   = (int) $data['exam_id'];
+        $examDate = trim($data['exam_date']);
+        $batch    = (int) $data['batch'];
 
-    if (! $dateExists) {
-        throw ValidationException::withMessages([
-            'exam_date' => ['Invalid exam date for this exam.'],
-        ]);
-    }
+        $exam = Exam::findOrFail($examId);
+        $batchNum = $exam->batch === 'new' ? 1 : 2;
+        if ($batch !== $batchNum) {
+            throw ValidationException::withMessages([
+                'batch' => ['Batch mismatch for selected exam.'],
+            ]);
+        }
 
-    // Faculties (for code/name display)
-    $faculties = Faculty::codeOrder()->get(['id','name','code'])->keyBy('id');
+        // Ensure this date is valid for this exam
+        $dateExists = RoutineSlot::where('exam_title', $exam->exam_title)
+            ->where('batch', $batch)
+            ->where('exam_date', $examDate)
+            ->exists();
 
-    // Rebuild "papers" and allocations (almost same as index())
-    $slots = RoutineSlot::where('exam_title', $exam->exam_title)
-        ->where('batch', $batch)
-        ->where('exam_date', $examDate)
-        ->with('subjects')
-        ->get();
+        if (! $dateExists) {
+            throw ValidationException::withMessages([
+                'exam_date' => ['Invalid exam date for this exam.'],
+            ]);
+        }
 
-    if ($slots->isEmpty()) {
-        throw ValidationException::withMessages([
-            'exam_date' => ['No routine slots found for this exam & date.'],
-        ]);
-    }
+        // Faculties (for code/name display)
+        $faculties = Faculty::codeOrder()->get(['id', 'name', 'code'])->keyBy('id');
 
-    // 1) Build paper map
-    $paperMap = []; // key => ['faculty_id','subject_code','semester']
-    foreach ($slots as $slot) {
-        foreach ($slot->subjects as $sub) {
-            $key = $sub->faculty_id.'|'.$sub->subject_code;
-            if (!isset($paperMap[$key])) {
-                $paperMap[$key] = [
-                    'faculty_id'   => $sub->faculty_id,
-                    'subject_code' => $sub->subject_code,
-                    'semester'     => $slot->semester,
-                ];
+        // Rebuild "papers" and allocations (almost same as index())
+        $slots = RoutineSlot::where('exam_title', $exam->exam_title)
+            ->where('batch', $batch)
+            ->where('exam_date', $examDate)
+            ->with('subjects')
+            ->get();
+
+        if ($slots->isEmpty()) {
+            throw ValidationException::withMessages([
+                'exam_date' => ['No routine slots found for this exam & date.'],
+            ]);
+        }
+
+        // 1) Build paper map
+        $paperMap = []; // key => ['faculty_id','subject_code','semester']
+        foreach ($slots as $slot) {
+            foreach ($slot->subjects as $sub) {
+                $key = $sub->faculty_id . '|' . $sub->subject_code;
+                if (!isset($paperMap[$key])) {
+                    $paperMap[$key] = [
+                        'faculty_id'   => $sub->faculty_id,
+                        'subject_code' => $sub->subject_code,
+                        'semester'     => $slot->semester,
+                    ];
+                }
             }
         }
-    }
 
-    // 2) Build papers with subject_name + total_students
-    $papers = [];
-    $totalStudents = 0;
-    $batchNum = $batch; // alias
+        // 2) Build papers with subject_name + total_students
+        $papers = [];
+        $totalStudents = 0;
+        $batchNum = $batch; // alias
 
-    foreach ($paperMap as $key => $info) {
-        $fid  = $info['faculty_id'];
-        $code = $info['subject_code'];
-        $sem  = $info['semester'];
+        foreach ($paperMap as $key => $info) {
+            $fid  = $info['faculty_id'];
+            $code = $info['subject_code'];
+            $sem  = $info['semester'];
 
-        $fss = FacultySemesterSubject::where('faculty_id', $fid)
-            ->where('semester', $sem)
-            ->where('batch', $batchNum)
-            ->where('subject_code', $code)
-            ->with('subject')
-            ->first();
+            $fss = FacultySemesterSubject::where('faculty_id', $fid)
+                ->where('semester', $sem)
+                ->where('batch', $batchNum)
+                ->where('subject_code', $code)
+                ->with('subject')
+                ->first();
 
-        $subjectName = $fss?->subject?->name ?? $code;
+            $subjectName = $fss?->subject?->name ?? $code;
 
-        $totalForPaper = ExamRegistrationSubject::query()
-            ->where('subject_code', $code)
-            ->whereHas('registration', function ($q) use ($exam, $sem, $batchNum, $fid) {
-                $q->where('exam_id', $exam->id)
-                  ->where('semester', $sem)
-                  ->where('batch', $batchNum)
-                  ->where('faculty_id', $fid);
-            })
-            ->where(function ($q) {
-                $q->where('th_taking', 1)
-                  ->orWhere('p_taking', 1);
-            })
-            ->count();
+            $totalForPaper = ExamRegistrationSubject::query()
+                ->where('subject_code', $code)
+                ->whereHas('registration', function ($q) use ($exam, $sem, $batchNum, $fid) {
+                    $q->where('exam_id', $exam->id)
+                        ->where('semester', $sem)
+                        ->where('batch', $batchNum)
+                        ->where('faculty_id', $fid);
+                })
+                ->where(function ($q) {
+                    $q->where('th_taking', 1)
+                        ->orWhere('p_taking', 1);
+                })
+                ->count();
 
-        $papers[$key] = [
-            'faculty_id'     => $fid,
-            'subject_code'   => $code,
-            'subject_name'   => $subjectName,
-            'semester'       => $sem,
-            'total_students' => $totalForPaper,
-        ];
+            $papers[$key] = [
+                'faculty_id'     => $fid,
+                'subject_code'   => $code,
+                'subject_name'   => $subjectName,
+                'semester'       => $sem,
+                'total_students' => $totalForPaper,
+            ];
 
-        $totalStudents += $totalForPaper;
-    }
-
-    // 3) Existing allocations
-    $allocations = RoomAllocation::where('exam_id', $exam->id)
-        ->where('exam_date', $examDate)
-        ->get();
-
-    $allocByRoom   = []; // [room_id][paperKey] = count
-    $totalsByRoom  = []; // [room_id] => total
-    $totalsByPaper = []; // [paperKey] => total
-
-    foreach ($allocations as $a) {
-        $pKey = $a->faculty_id.'|'.$a->subject_code;
-
-        if (!isset($allocByRoom[$a->room_id])) {
-            $allocByRoom[$a->room_id] = [];
+            $totalStudents += $totalForPaper;
         }
-        $allocByRoom[$a->room_id][$pKey] = (int) $a->student_count;
 
-        if (!isset($totalsByRoom[$a->room_id])) {
-            $totalsByRoom[$a->room_id] = 0;
-        }
-        $totalsByRoom[$a->room_id] += (int) $a->student_count;
+        // 3) Existing allocations
+        $allocations = RoomAllocation::where('exam_id', $exam->id)
+            ->where('exam_date', $examDate)
+            ->get();
 
-        if (!isset($totalsByPaper[$pKey])) {
-            $totalsByPaper[$pKey] = 0;
-        }
-        $totalsByPaper[$pKey] += (int) $a->student_count;
-    }
+        $allocByRoom   = []; // [room_id][paperKey] = count
+        $totalsByRoom  = []; // [room_id] => total
+        $totalsByPaper = []; // [paperKey] => total
 
-    // 4) Only rooms that actually have allocations
-    $roomIds = array_keys($allocByRoom);
-    $rooms = Room::whereIn('id', $roomIds)
-        ->orderBy('room_no')
-        ->get();
+        foreach ($allocations as $a) {
+            $pKey = $a->faculty_id . '|' . $a->subject_code;
 
-    // 5) Sort papers by faculty custom order, then subject_code
-    if (!empty($papers)) {
-        $facOrder = $faculties->pluck('id')->values()->flip();
-        uasort($papers, function ($a, $b) use ($facOrder) {
-            $posA = $facOrder[$a['faculty_id']] ?? 999;
-            $posB = $facOrder[$b['faculty_id']] ?? 999;
-
-            if ($posA === $posB) {
-                return strcmp($a['subject_code'], $b['subject_code']);
+            if (!isset($allocByRoom[$a->room_id])) {
+                $allocByRoom[$a->room_id] = [];
             }
-            return $posA <=> $posB;
-        });
+            $allocByRoom[$a->room_id][$pKey] = (int) $a->student_count;
+
+            if (!isset($totalsByRoom[$a->room_id])) {
+                $totalsByRoom[$a->room_id] = 0;
+            }
+            $totalsByRoom[$a->room_id] += (int) $a->student_count;
+
+            if (!isset($totalsByPaper[$pKey])) {
+                $totalsByPaper[$pKey] = 0;
+            }
+            $totalsByPaper[$pKey] += (int) $a->student_count;
+        }
+
+        // 4) Only rooms that actually have allocations
+        $roomIds = array_keys($allocByRoom);
+        $rooms = Room::whereIn('id', $roomIds)
+            ->orderBy('room_no')
+            ->get();
+
+        // 5) Sort papers by faculty custom order, then subject_code
+        if (!empty($papers)) {
+            $facOrder = $faculties->pluck('id')->values()->flip();
+            uasort($papers, function ($a, $b) use ($facOrder) {
+                $posA = $facOrder[$a['faculty_id']] ?? 999;
+                $posB = $facOrder[$b['faculty_id']] ?? 999;
+
+                if ($posA === $posB) {
+                    return strcmp($a['subject_code'], $b['subject_code']);
+                }
+                return $posA <=> $posB;
+            });
+        }
+
+        // 6) Render PDF
+        // 6) Render PDF
+        $pdf = Pdf::loadView('Backend.admin.room_allocations.print', [
+            'exam'          => $exam,
+            'examDate'      => $examDate,    // keep original for display
+            'batch'         => $batch,
+            'rooms'         => $rooms,
+            'faculties'     => $faculties,
+            'papers'        => $papers,
+            'allocByRoom'   => $allocByRoom,
+            'totalsByRoom'  => $totalsByRoom,
+            'totalsByPaper' => $totalsByPaper,
+            'totalStudents' => $totalStudents,
+        ])->setPaper('A4', 'landscape');
+        $safeDate  = str_replace(['/', '\\'], '-', $examDate);
+        $fileName = 'room-plan-' . $exam->id . '-' . $safeDate . '.pdf';
+
+
+        return $pdf->stream($fileName);
     }
-
-    // 6) Render PDF
-   // 6) Render PDF
-$pdf = Pdf::loadView('Backend.admin.room_allocations.print', [
-    'exam'          => $exam,
-    'examDate'      => $examDate,    // keep original for display
-    'batch'         => $batch,
-    'rooms'         => $rooms,
-    'faculties'     => $faculties,
-    'papers'        => $papers,
-    'allocByRoom'   => $allocByRoom,
-    'totalsByRoom'  => $totalsByRoom,
-    'totalsByPaper' => $totalsByPaper,
-    'totalStudents' => $totalStudents,
-])->setPaper('A4', 'landscape');
-$safeDate  = str_replace(['/', '\\'], '-', $examDate);
-$fileName = 'room-plan-'.$exam->id.'-'.$safeDate.'.pdf';
-
-
-return $pdf->stream($fileName);
-
-}
-
 }

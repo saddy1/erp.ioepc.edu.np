@@ -74,172 +74,6 @@ class RoomController extends Controller
 
     // ----------------- NEW: Exam seat-plan sheet -----------------
 
-    /**
-     * Show room-wise exam roll list (symbol numbers) like the printed sheet.
-     * Filters: exam_id, exam_date, batch.
-     */
-    public function examSeatPlan(Request $r)
-    {
-        $examId   = (int) $r->query('exam_id', 0);
-        $examDate = trim((string) $r->query('exam_date', ''));
-        $batch    = $r->query('batch'); // 1 or 2 or null
-
-        // All upcoming exams
-        $exams = Exam::where('status', 0)
-            ->orderByDesc('id')
-            ->get(['id', 'exam_title', 'semester', 'batch']);
-
-        $exam           = null;
-        $allocatedDates = [];
-        $roomSummaries  = [];
-        $hasData        = false;
-
-        if ($examId) {
-            $exam = $exams->firstWhere('id', $examId);
-
-            if ($exam) {
-                $examBatchNum = $exam->batch === 'new' ? 1 : 2;
-                if ($batch === null || $batch === '') {
-                    $batch = (string) $examBatchNum;
-                }
-
-                // Dates where room allocations exist for this exam
-                $allocatedDates = RoomAllocation::where('exam_id', $exam->id)
-                    ->distinct()
-                    ->orderBy('exam_date')
-                    ->pluck('exam_date')
-                    ->toArray();
-
-                if ($examDate && in_array($examDate, $allocatedDates, true)) {
-                    $hasData = true;
-
-                    // All allocations for that day
-                    $allocations = RoomAllocation::where('exam_id', $exam->id)
-                        ->where('exam_date', $examDate)
-                        ->orderBy('room_id')
-                        ->get();
-
-                    if ($allocations->isEmpty()) {
-                        $hasData = false;
-                    } else {
-                        // Rooms and faculties
-                        $rooms     = Room::whereIn('id', $allocations->pluck('room_id')->unique())
-                            ->orderBy('room_no')
-                            ->get()
-                            ->keyBy('id');
-
-                        $faculties = Faculty::all()->keyBy('id');
-
-                        // Papers (faculty + subject_code)
-                        $paperKeys = $allocations->map(fn($a) => $a->faculty_id . '|' . $a->subject_code)
-                            ->unique()
-                            ->values();
-
-                        // For each paper, fetch registered students (symbol_no = exam_roll_no)
-                        $paperStudents = [];
-                        $paperOffsets  = [];
-
-                        foreach ($paperKeys as $pKey) {
-                            [$fid, $code] = explode('|', $pKey);
-
-                            $subjects = ExamRegistrationSubject::query()
-                                ->where('subject_code', $code)
-                                ->whereHas('registration', function ($q) use ($exam, $batch, $fid) {
-                                    $q->where('exam_id', $exam->id)
-                                        ->where('batch', (int)$batch)
-                                        ->where('faculty_id', (int)$fid);
-                                })
-                                ->where(function ($q) {
-                                    $q->where('th_taking', 1)
-                                        ->orWhere('p_taking', 1);
-                                })
-                                ->with(['registration']) // we just need exam_roll_no
-                                ->get()
-                                ->sortBy(fn($s) => (int) ($s->registration->exam_roll_no ?? 0))
-                                ->values();
-
-                            $paperStudents[$pKey] = $subjects;
-                            $paperOffsets[$pKey]  = 0;
-                        }
-
-                        // Build room summaries:
-                        //  roomSummaries[room_id] = [
-                        //    'room' => Room,
-                        //    'rows' => [
-                        //       ['faculty' => Faculty, 'rolls' => [...exam_roll_no...], 'total' => n],
-                        //    ],
-                        //    'room_total' => total students in room
-                        //  ]
-                        $roomSummaries = [];
-
-                        foreach ($rooms as $roomId => $room) {
-                            $allocForRoom  = $allocations->where('room_id', $roomId);
-                            $roomStudents  = []; // [faculty_id => [rolls...]]
-
-                            foreach ($allocForRoom as $a) {
-                                $pKey   = $a->faculty_id . '|' . $a->subject_code;
-                                $needed = (int) $a->student_count;
-                                if ($needed <= 0) continue;
-
-                                $globalList = $paperStudents[$pKey] ?? collect();
-                                $offset     = $paperOffsets[$pKey] ?? 0;
-
-                                $slice = $globalList->slice($offset, $needed);
-                                $paperOffsets[$pKey] = $offset + $slice->count();
-
-                                foreach ($slice as $s) {
-                                    $symbol = $s->registration->exam_roll_no ?? null;
-                                    if (!$symbol) continue;
-
-                                    $fid = (int) $a->faculty_id;
-                                    if (!isset($roomStudents[$fid])) {
-                                        $roomStudents[$fid] = [];
-                                    }
-                                    $roomStudents[$fid][] = $symbol;
-                                }
-                            }
-
-                            // Build rows per faculty for this room
-                            $rows       = [];
-                            $roomTotal  = 0;
-
-                            foreach ($roomStudents as $fid => $rolls) {
-                                sort($rolls, SORT_NUMERIC);
-                                $faculty  = $faculties[$fid] ?? null;
-                                $rows[]   = [
-                                    'faculty' => $faculty,
-                                    'rolls'   => $rolls,
-                                    'total'   => count($rolls),
-                                ];
-                                $roomTotal += count($rolls);
-                            }
-
-                            $roomSummaries[$roomId] = [
-                                'room'       => $room,
-                                'rows'       => $rows,
-                                'room_total' => $roomTotal,
-                            ];
-                        }
-                    }
-                }
-            }
-        }
-
-        return view('Backend.admin.rooms.exam_seat_plan', compact(
-            'exams',
-            'exam',
-            'examId',
-            'examDate',
-            'batch',
-            'allocatedDates',
-            'roomSummaries',
-            'hasData'
-        ));
-    }
-
-    /**
-     * Print view (plain layout) – uses same data as examSeatPlan.
-     */
     private function toRoman($num)
     {
         $map = [
@@ -292,7 +126,7 @@ class RoomController extends Controller
         // All upcoming exams
         $exams = Exam::where('status', 0)
             ->orderByDesc('id')
-            ->get(['id', 'exam_title', 'semester', 'batch']);
+            ->get(['id', 'exam_title', 'semester', 'batch', 'start_time', 'end_time']);
 
         $exam           = null;
         $allocatedDates = [];
@@ -386,7 +220,8 @@ class RoomController extends Controller
             ->get()
             ->keyBy('id');
 
-        $faculties = Faculty::all()->keyBy('id');
+      $faculties = Faculty::codeOrder()->get()->keyBy('id');   // 🔹 use scope here
+
 
         // ✅ All distinct paper keys for THIS SPECIFIC exam date only
         $paperKeys = $allocations->map(fn($a) => $a->faculty_id . '|' . $a->subject_code)
@@ -450,6 +285,8 @@ class RoomController extends Controller
 
             $paperMeta[$pKey] = [
                 'programme' => $faculty?->name ?? 'N/A',
+                    'code'      => $faculty?->code ?? null,  
+
                 'semester'  =>  $semesterRoman,
                 'subject'   => $subjectName,
                 'regular'   => $regularCount,
@@ -492,16 +329,27 @@ class RoomController extends Controller
             $rows      = [];
             $roomTotal = 0;
 
-            foreach ($roomStudents as $fid => $rolls) {
+            // Go through faculties in your custom order
+            foreach ($faculties as $fid => $faculty) {
+                // If this faculty has no students in this room, skip
+                if (!isset($roomStudents[$fid])) {
+                    continue;
+                }
+
+                $rolls = $roomStudents[$fid];
                 sort($rolls, SORT_NUMERIC);
-                $faculty = $faculties[$fid] ?? null;
-                $rows[]  = [
+
+                $rows[] = [
                     'faculty' => $faculty,
                     'rolls'   => $rolls,
                     'total'   => count($rolls),
                 ];
+
                 $roomTotal += count($rolls);
             }
+
+        
+
 
             $roomSummaries[$roomId] = [
                 'room'       => $room,
@@ -510,20 +358,35 @@ class RoomController extends Controller
             ];
         }
 
-        // Build top summary rows (programme-wise)
-        if (!empty($paperMeta)) {
-            // Sort by programme then subject
-            usort($paperMeta, function ($a, $b) {
-                $pa = strtoupper($a['programme'] ?? '');
-                $pb = strtoupper($b['programme'] ?? '');
-                if ($pa === $pb) {
-                    return strcmp($a['subject'] ?? '', $b['subject'] ?? '');
-                }
-                return strcmp($pa, $pb);
-            });
+        // Build top summary rows in custom faculty order
+if (!empty($paperMeta)) {
 
-            $summaryRows = array_values($paperMeta);
+    $order = ['BCE', 'BEL', 'BEI', 'BCT', 'BEX', 'BME', 'BAG', 'BAR'];
+
+    usort($paperMeta, function ($a, $b) use ($order) {
+
+        $codeA = $a['code'] ?? null;
+        $codeB = $b['code'] ?? null;
+
+        // Find position of each faculty code in custom order
+        $posA = array_search($codeA, $order);
+        $posB = array_search($codeB, $order);
+
+        // Put codes not in order at the end
+        $posA = $posA === false ? PHP_INT_MAX : $posA;
+        $posB = $posB === false ? PHP_INT_MAX : $posB;
+
+        // If same faculty, sort by subject name
+        if ($posA === $posB) {
+            return strcmp($a['subject'] ?? '', $b['subject'] ?? '');
         }
+
+        return $posA <=> $posB;
+    });
+
+    $summaryRows = array_values($paperMeta);
+}
+
 
         // Print-friendly view
         return view('Backend.admin.rooms.exam_seat_plan_print', compact(

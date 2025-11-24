@@ -275,52 +275,65 @@
                         </thead>
                         <tbody>
                             @for ($rowIdx = 1; $rowIdx <= $maxRows; $rowIdx++)
-                                <tr>
-                                    @for ($c = 1; $c <= 3; $c++)
-                                        @php
-                                            $rows = $cols[$c] ?? [];
-                                            $bench = $rows[$rowIdx] ?? null;
+    <tr>
+        @for ($c = 1; $c <= 3; $c++)
+            @php
+                $rows  = $cols[$c] ?? [];
+                $bench = $rows[$rowIdx] ?? null;
 
-                                            $left = $bench['left'] ?? null;
-                                            $right = $bench['right'] ?? null;
+                $left  = $bench['left'] ?? null;
+                $right = $bench['right'] ?? null;
 
-                                            $sameSubject = $left && $right && $left['subject_code'] === $right['subject_code'];
-                                        @endphp
+                $sameSubject = $left && $right && $left['subject_code'] === $right['subject_code'];
 
-                                        <td class="{{ $c < 3 ? 'col-spacing' : '' }}">
-                                            <table class="bench-row-table">
-                                                <tr>
-                                                    <td class="row-label-cell">R{{ $rowIdx }}</td>
-                                                    <td class="bench-cell">
-                                                        @if ($bench)
-                                                            <div class="bench-wrapper {{ $sameSubject ? 'same-subject' : '' }}">
-                                                                <table class="bench-inner-table">
-                                                                    <tr>
-                                                                        <td class="bench-symbol-left">
-                                                                            @if ($left && !empty($left['symbol_no']))
-                                                                                {{ $left['symbol_no'] }}
-                                                                            @else
-                                                                                &mdash;
-                                                                            @endif
-                                                                        </td>
-                                                                        <td class="bench-symbol-right">
-                                                                            @if ($right && !empty($right['symbol_no']))
-                                                                                {{ $right['symbol_no'] }}
-                                                                            @else
-                                                                                &mdash;
-                                                                            @endif
-                                                                        </td>
-                                                                    </tr>
-                                                                </table>
-                                                            </div>
-                                                        @endif
-                                                    </td>
-                                                </tr>
-                                            </table>
-                                        </td>
-                                    @endfor
-                                </tr>
-                            @endfor
+                // ⭐ Column 3: if exactly one student on this bench, show on RIGHT side
+                if ($c === 3 && $bench) {
+                    $hasLeft  = !empty($left);
+                    $hasRight = !empty($right);
+
+                    if ($hasLeft && !$hasRight) {
+                        // Move student visually to right & clear left
+                        $right = $left;
+                        $left  = null;
+                    }
+                }
+            @endphp
+
+            <td class="{{ $c < 3 ? 'col-spacing' : '' }}">
+                <table class="bench-row-table">
+                    <tr>
+                        <td class="row-label-cell">R{{ $rowIdx }}</td>
+                        <td class="bench-cell">
+                            @if ($bench)
+                                <div class="bench-wrapper {{ $sameSubject ? 'same-subject' : '' }}">
+                                    <table class="bench-inner-table">
+                                        <tr>
+                                            <td class="bench-symbol-left">
+                                                @if ($left && !empty($left['symbol_no']))
+                                                    {{ $left['symbol_no'] }}
+                                                @else
+                                                    &mdash;
+                                                @endif
+                                            </td>
+                                            <td class="bench-symbol-right">
+                                                @if ($right && !empty($right['symbol_no']))
+                                                    {{ $right['symbol_no'] }}
+                                                @else
+                                                    &mdash;
+                                                @endif
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            @endif
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        @endfor
+    </tr>
+@endfor
+
                         </tbody>
                     </table>
                 </div>

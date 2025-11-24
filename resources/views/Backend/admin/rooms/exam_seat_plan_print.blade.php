@@ -159,6 +159,10 @@
                 &nbsp; | &nbsp; Batch: {{ $batch == 1 ? 'New' : 'Old' }}
             @endif
         </div>
+        <div class="header-title" style="text-align: right"  >
+        {{ $exam->start_time ? ' Time: ' . \Carbon\Carbon::parse($exam->start_time)->format('h:i A') : '' }}
+
+        </div>
     </div>
 
     @if(!$hasData)
@@ -226,34 +230,45 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach($roomSummaries as $roomId => $info)
-                    @php
-                        $room = $info['room'];
-                        $rows = $info['rows'];
-                    @endphp
+@foreach($roomSummaries as $roomId => $info)
+    @php
+        $room = $info['room'];
+        $rows = $info['rows'];
+        $rowCount = count($rows);   // how many faculty groups in this room
+    @endphp
 
-                    @foreach($rows as $row)
-                        <tr>
-                            <td class="text-center"><strong>{{ $room->room_no }}</strong></td>
-                            <td class="text-center">
-                                @if($row['faculty'])
-                                    <strong>{{ $row['faculty']->code }}</strong>
-                                @else
-                                    —
-                                @endif
-                            </td>
-                            <td class="roll-numbers">{{ implode(', ', $row['rolls']) }}</td>
-                            <td class="text-center"><strong>{{ $row['total'] }}</strong></td>
-                        </tr>
-                    @endforeach
+    @foreach($rows as $index => $row)
+        <tr>
 
-                    <tr class="room-total-row">
-                        <td colspan="3" class="text-center bold">ROOM {{ $room->room_no }} TOTAL</td>
-                        <td class="text-center bold">{{ $info['room_total'] }}</td>
-                    </tr>
+            {{-- Merge Room No. cell --}}
+            @if($index == 0)
+                <td class="text-center" rowspan="{{ $rowCount }}">
+                    <strong>{{ $room->room_no }}</strong>
+                </td>
+            @endif
 
-                @endforeach
-            </tbody>
+            <td class="text-center">
+                @if($row['faculty'])
+                    <strong>{{ $row['faculty']->code }}</strong>
+                @else
+                    —
+                @endif
+            </td>
+
+            <td class="roll-numbers">{{ implode(', ', $row['rolls']) }}</td>
+            <td class="text-center"><strong>{{ $row['total'] }}</strong></td>
+        </tr>
+    @endforeach
+
+    {{-- Room total row --}}
+    <tr class="room-total-row">
+        <td colspan="3" class="bold" style="text-align:right">TOTAL STUDENTS</td>
+        <td class="text-center bold">{{ $info['room_total'] }}</td>
+    </tr>
+
+@endforeach
+</tbody>
+
         </table>
 
     @endif

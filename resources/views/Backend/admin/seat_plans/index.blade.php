@@ -250,138 +250,200 @@
                 </p>
             </div>
         @else
-            {{-- Seat layout --}}
-            <div class="space-y-4">
-                @foreach ($seatLayout as $roomId => $data)
-                    @php
-                        $room = $data['room'];
-                        $cols = $data['cols'];
-                        $invigilators = $data['invigilators'] ?? [];
-                    @endphp
+          {{-- Seat layout --}}
+{{-- Seat layout – preview styled similar to PDF layout --}}
+<div class="space-y-6">
+    @foreach ($seatLayout as $roomId => $data)
+        @php
+            $room         = $data['room'];
+            $cols         = $data['cols'];
+            $invigilators = $data['invigilators'] ?? [];
 
-                    <div class="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                        {{-- Room header --}}
-                        <div class="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 border-b">
-                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                <div>
-                                    <h2 class="text-sm font-bold text-gray-900">Room {{ $room->room_no }}</h2>
-                                    <p class="text-[10px] text-gray-600 mt-0.5">
-                                        Benches: {{ $room->computed_total_benches }} &middot;
-                                        Seats: {{ $room->computed_total_seats }}
-                                    </p>
-                                </div>
+            $maxRows = max(
+                count($cols[1] ?? []),
+                count($cols[2] ?? []),
+                count($cols[3] ?? [])
+            );
+        @endphp
 
-                                <div class="flex items-center gap-2">
-                                    <span class="text-[10px] font-semibold text-gray-600">Invigilators:</span>
-                                    <div class="flex flex-wrap gap-1">
-                                        @forelse($invigilators as $inv)
-                                            <span
-                                                class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium
-                                                {{ $inv->employee_type === 'faculty'
-                                                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                                    : 'bg-purple-100 text-purple-800 border border-purple-200' }}">
-                                                {{ $inv->full_name }}
-                                                <span class="text-[8px] opacity-75">
-                                                    ({{ ucfirst($inv->employee_type) }})
-                                                </span>
-                                            </span>
-                                        @empty
-                                            <span class="text-[10px] text-gray-400 italic">Not assigned</span>
-                                        @endforelse
-                                    </div>
-                                </div>
+        <div class="rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            {{-- Room / exam header (similar to PDF main + room header) --}}
+            <div class="border-b bg-gray-50">
+                <div class="px-4 py-3 border-b border-gray-200">
+                    <div class="text-center">
+                        <div class="text-sm font-extrabold tracking-[0.20em] uppercase text-gray-900">
+                            Examination Seat Plan
+                        </div>
+                        <div class="mt-1 text-[11px] text-gray-700">
+                            <strong>{{ $exam->exam_title }}</strong>
+                            &nbsp;|&nbsp;
+                            Semester: {{ $exam->semester }}
+                            &nbsp;|&nbsp;
+                            Batch: {{ ucfirst($exam->batch) }}
+                            &nbsp;|&nbsp;
+                            Date: <strong>{{ $examDate }}</strong>
+                            @if ($exam->start_time && $exam->end_time)
+                                &nbsp;|&nbsp;
+                                Time:
+                                {{ \Carbon\Carbon::parse($exam->start_time)->format('h:i A') }}
+                                –
+                                {{ \Carbon\Carbon::parse($exam->end_time)->format('h:i A') }}
+                            @endif
+                        </div>
+                    </div>
+                </div>
+
+                <div class="px-4 py-2 bg-gradient-to-r from-gray-50 to-gray-100">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div>
+                            <div class="text-sm font-bold text-gray-900">
+                                Room {{ $room->room_no }}
+                            </div>
+                            <div class="text-[10px] text-emerald-700 mt-0.5">
+                                Benches:
+                                <strong>{{ $room->computed_total_benches }}</strong>
+                                &nbsp;•&nbsp;
+                                Seats:
+                                <strong>{{ $room->computed_total_seats }}</strong>
                             </div>
                         </div>
 
-                        {{-- Seat grid --}}
-                        <div class="p-4">
-                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                @for ($c = 1; $c <= 3; $c++)
-                                    @php $rows = $cols[$c] ?? []; @endphp
-                                    @if (!empty($rows))
-                                        <div>
-                                            <div
-                                                class="text-[10px] font-bold text-gray-700 mb-2 pb-1 border-b border-gray-200">
-                                                Column {{ $c }}
-                                            </div>
-                                            <div class="space-y-2">
-                                                @foreach ($rows as $rowIndex => $bench)
-                                                    @php
-                                                        $left = $bench['left'] ?? null;
-                                                        $right = $bench['right'] ?? null;
-                                                        $sameSubject =
-                                                            $left &&
-                                                            $right &&
-                                                            $left['subject_code'] === $right['subject_code'];
-                                                    @endphp
-                                                    <div class="flex items-center gap-2">
-                                                        <div class="text-[9px] font-bold text-gray-400 w-6 text-center">
-                                                            R{{ $rowIndex }}
-                                                        </div>
-                                                        <div
-                                                            class="flex-1 {{ $sameSubject ? 'bg-amber-50 border-amber-300' : 'bg-gray-50 border-gray-200' }} border-2 rounded-lg p-1">
-                                                            <div class="grid grid-cols-2 gap-1">
-                                                                {{-- left --}}
-                                                                <div
-                                                                    class="bg-white rounded border {{ $left ? 'border-gray-300' : 'border-dashed border-gray-200' }} p-1.5 min-h-[50px] flex flex-col justify-between">
-                                                                    @if ($left)
-                                                                        <div
-                                                                            class="text-[8px] font-semibold text-gray-500 uppercase tracking-wide">
-                                                                            {{ $left['subject_code'] }}
-                                                                        </div>
-                                                                        <div
-                                                                            class="text-[13px] font-bold text-gray-900 font-mono text-right">
-                                                                            {{ $left['symbol_no'] }}
-                                                                        </div>
-                                                                    @else
-                                                                        <div
-                                                                            class="text-[9px] text-gray-300 text-center m-auto">
-                                                                            —</div>
-                                                                    @endif
-                                                                </div>
-                                                                {{-- right --}}
-                                                                <div
-                                                                    class="bg-white rounded border {{ $right ? 'border-gray-300' : 'border-dashed border-gray-200' }} p-1.5 min-h-[50px] flex flex-col justify-between">
-                                                                    @if ($right)
-                                                                        <div
-                                                                            class="text-[8px] font-semibold text-gray-500 uppercase tracking-wide">
-                                                                            {{ $right['subject_code'] }}
-                                                                        </div>
-                                                                        <div
-                                                                            class="text-[13px] font-bold text-gray-900 font-mono text-right">
-                                                                            {{ $right['symbol_no'] }}
-                                                                        </div>
-                                                                    @else
-                                                                        <div
-                                                                            class="text-[9px] text-gray-300 text-center m-auto">
-                                                                            —</div>
-                                                                    @endif
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        @if ($sameSubject)
-                                                            <div class="text-amber-500"
-                                                                title="Same subject on this bench">
-                                                                <svg class="w-4 h-4" fill="currentColor"
-                                                                    viewBox="0 0 20 20">
-                                                                    <path fill-rule="evenodd"
-                                                                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
-                                                                        clip-rule="evenodd" />
-                                                                </svg>
-                                                            </div>
-                                                        @endif
-                                                    </div>
-                                                @endforeach
-                                            </div>
-                                        </div>
-                                    @endif
-                                @endfor
+                        {{-- Invigilators badge list (similar concept to PDF badges) --}}
+                        <div class="text-right">
+                            <div class="text-[10px] text-gray-500 mb-1">
+                                Invigilators
+                            </div>
+                            <div class="flex flex-wrap gap-1 justify-end">
+                                @forelse($invigilators as $inv)
+                                    <span
+                                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border
+                                        {{ $inv->employee_type === 'faculty'
+                                            ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                                            : 'bg-purple-50 border-purple-300 text-purple-800' }}">
+                                        {{ $inv->full_name }}
+                                        <span class="text-[8px] opacity-70">
+                                            ({{ ucfirst($inv->employee_type) }})
+                                        </span>
+                                    </span>
+                                @empty
+                                    <span class="text-[10px] text-gray-400 italic">
+                                        Not assigned
+                                    </span>
+                                @endforelse
                             </div>
                         </div>
                     </div>
-                @endforeach
+                </div>
             </div>
+
+            {{-- Seat grid – 3 columns, R1/R2 etc, big symbol numbers like PDF --}}
+            <div class="px-4 py-4 overflow-x-auto">
+                <table class="w-full text-[11px] border-collapse">
+                    <thead>
+                        <tr class="border-b-2 border-gray-200">
+                            <th class="text-left pb-2 pr-4 text-[11px] font-bold text-gray-600">
+                                Column 1
+                            </th>
+                            <th class="text-left pb-2 pr-4 text-[11px] font-bold text-gray-600">
+                                Column 2
+                            </th>
+                            <th class="text-left pb-2 text-[11px] font-bold text-gray-600">
+                                Column 3
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for ($rowIdx = 1; $rowIdx <= $maxRows; $rowIdx++)
+                            <tr>
+                                @for ($c = 1; $c <= 3; $c++)
+                                    @php
+                                        $rows  = $cols[$c] ?? [];
+                                        $bench = $rows[$rowIdx] ?? null;
+
+                                        $left  = $bench['left'] ?? null;
+                                        $right = $bench['right'] ?? null;
+
+                                        $sameSubject = $left && $right && $left['subject_code'] === $right['subject_code'];
+
+                                        // ⭐ Column 3 rule: if only one student, show on RIGHT side
+                                        if ($c === 3 && $bench) {
+                                            $hasLeft  = !empty($left);
+                                            $hasRight = !empty($right);
+
+                                            if ($hasLeft && !$hasRight) {
+                                                $right = $left;
+                                                $left  = null;
+                                            }
+                                        }
+                                    @endphp
+
+                                    <td class="{{ $c < 3 ? 'pr-4' : '' }} align-top pt-2">
+                                        @if ($bench)
+                                            <div class="flex items-start gap-1">
+                                                {{-- Row label: R1, R2... --}}
+                                                <div class="w-7 text-[9px] font-bold text-gray-400 pt-1 text-center">
+                                                    R{{ $rowIdx }}
+                                                </div>
+
+                                                {{-- Bench wrapper (like PDF box) --}}
+                                                <div
+                                                    class="flex-1 rounded-xl border-2 p-1.5
+                                                    {{ $sameSubject ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-gray-50' }}">
+                                                    <table class="w-full border-collapse">
+                                                        <tr>
+                                                            {{-- LEFT seat --}}
+                                                            <td class="w-1/2 border border-gray-200 bg-white px-2 py-2">
+                                                                <div class="text-[15px] font-extrabold font-mono text-left text-gray-900">
+                                                                    @if ($left && !empty($left['symbol_no']))
+                                                                        {{ $left['symbol_no'] }}
+                                                                    @else
+                                                                        &mdash;
+                                                                    @endif
+                                                                </div>
+                                                            </td>
+
+                                                            {{-- RIGHT seat --}}
+                                                            <td class="w-1/2 border border-gray-200 bg-white px-2 py-2">
+                                                                <div class="text-[15px] font-extrabold font-mono text-right text-gray-900">
+                                                                    @if ($right && !empty($right['symbol_no']))
+                                                                        {{ $right['symbol_no'] }}
+                                                                    @else
+                                                                        &mdash;
+                                                                    @endif
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    </table>
+                                                </div>
+
+                                                {{-- Same-subject warning like triangle --}}
+                                                @if ($sameSubject)
+                                                    <div class="text-amber-500 pt-1" title="Same subject on this bench">
+                                                        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fill-rule="evenodd"
+                                                                d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                                                                clip-rule="evenodd" />
+                                                        </svg>
+                                                    </div>
+                                                @endif
+                                            </div>
+                                        @endif
+                                    </td>
+                                @endfor
+                            </tr>
+                        @endfor
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="border-t px-4 py-2 bg-gray-50 text-[9px] text-gray-500 text-right">
+                Preview only – final print layout uses PDF template.
+            </div>
+        </div>
+    @endforeach
+</div>
+
+
         @endif
     </div>
 

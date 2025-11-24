@@ -47,7 +47,7 @@ class SeatPlanController extends Controller
                 ->toArray();
         }
 
-        // Saved invigilators for this exam + date
+        // Saved invigilators for this exam + date (to prefill selection)
         $hasSavedInvigilators   = false;
         $savedAssignmentsByRoom = collect();
 
@@ -88,344 +88,19 @@ class SeatPlanController extends Controller
                 $examBatchNum = $exam->batch === 'new' ? 1 : 2;
                 $batch        = $batchParam ? (int) $batchParam : $examBatchNum;
 
-                // Allocations for this exam + date
-                $allocations = RoomAllocation::where('exam_id', $exam->id)
-                    ->where('exam_date', $examDate)
-                    ->orderBy('room_id')
-                    ->orderBy('faculty_id')      // Add this
-                    ->orderBy('subject_code')    // Add this
-                    ->orderBy('id')              // Fallback tie-breaker
-                    ->get();
-                if ($allocations->isNotEmpty()) {
-                    $hasData = true;
+                // 🔁 Use the same generator as PDFs so logic is identical
+                $layoutData = $this->generateSeatLayout($examId, $examDate, $batch, $employeeIds, true);
 
-                    // Rooms used that day
-                    $rooms = Room::whereIn('id', $allocations->pluck('room_id')->unique())
-                        ->orderBy('room_no')
-                        ->get()
-                        ->keyBy('id');
+                if ($layoutData['hasData']) {
+                    $hasData    = true;
+                    $exam       = $layoutData['exam'];
+                    $rooms      = $layoutData['rooms'];
+                    $seatLayout = $layoutData['seatLayout'];
+                    $paperInfo  = $layoutData['paperInfo'];
 
-                    // Paper keys faculty_id|subject_code
-                    $paperKeys = $allocations->map(fn($a) => $a->faculty_id . '|' . $a->subject_code)
-                        ->unique()
-                        ->values();
-
-                    // Students for each paper
-                    $paperStudents = [];
-                    $paperOffsets  = [];
-
-                    foreach ($paperKeys as $pKey) {
-                        [$fid, $code] = explode('|', $pKey);
-
-                        $subjects = ExamRegistrationSubject::query()
-                            ->where('subject_code', $code)
-                            ->whereHas('registration', function ($q) use ($exam, $batch, $fid) {
-                                $q->where('exam_id', $exam->id)
-                                    ->where('batch', $batch)
-                                    ->where('faculty_id', (int) $fid);
-                            })
-                            ->where(function ($q) {
-                                $q->where('th_taking', 1)
-                                    ->orWhere('p_taking', 1);
-                            })
-                            ->with(['registration.student', 'fss.subject'])
-                            ->get();
-
-                        $sorted = $subjects->sortBy(fn($s) => (int) ($s->registration->exam_roll_no ?? 0))
-                            ->values();
-
-                        $paperStudents[$pKey] = $sorted;
-                        $paperOffsets[$pKey]  = 0;
-
-                        $subjectName = $sorted->first()?->fss?->subject?->name ?? $code;
-
-                        $paperInfo[$pKey] = [
-                            'faculty_id'   => (int) $fid,
-                            'subject_code' => $code,
-                            'subject_name' => $subjectName,
-                        ];
-                    }
-
-                    // We now ALWAYS allow changing invigilators:
-                    // if you select employees in UI, we use that selection (no random).
-                    $assignFromSelection = !empty($employeeIds);
-
-                    $staffPool   = collect();
-                    $facultyPool = collect();
-
-                    if ($assignFromSelection) {
-                        $selectedEmployees = $employees->whereIn('id', $employeeIds)->values();
-
-                        // No random: deterministic order by type + name
-                        $basePool = $selectedEmployees->isNotEmpty()
-                            ? $selectedEmployees->sortBy([
-                                ['employee_type', 'desc'],
-                                ['full_name', 'asc'],
-                            ])->values()
-                            : $employees->sortBy([
-                                ['employee_type', 'desc'],
-                                ['full_name', 'asc'],
-                            ])->values();
-
-                        $staffPool   = $basePool->where('employee_type', 'staff')->values();
-                        $facultyPool = $basePool->where('employee_type', 'faculty')->values();
-                    }
-
-                    // Build layout per room
-                    foreach ($rooms as $roomId => $room) {
-                        $totalBenches = $room->computed_total_benches;
-                        $totalSeats   = $totalBenches * 2;
-
-                        $allocForRoom = $allocations->where('room_id', $roomId);
-
-                        // Queues of students per paper for this room
-                        $roomQueues = [];
-                        foreach ($allocForRoom as $a) {
-                            $pKey   = $a->faculty_id . '|' . $a->subject_code;
-                            $needed = (int) $a->student_count;
-
-                            if ($needed <= 0) {
-                                continue;
-                            }
-
-                            $globalList = $paperStudents[$pKey] ?? collect();
-                            $offset     = $paperOffsets[$pKey] ?? 0;
-
-                            $slice = $globalList->slice($offset, $needed);
-                            $paperOffsets[$pKey] = $offset + $slice->count();
-
-                            if ($slice->isEmpty()) {
-                                continue;
-                            }
-
-                            foreach ($slice as $s) {
-                                $roomQueues[$pKey][] = [
-                                    'symbol_no'    => $s->registration->exam_roll_no ?? null,
-                                    'subject_key'  => $pKey,
-                                    'subject_code' => $a->subject_code,
-                                    'faculty_id'   => $a->faculty_id,
-                                ];
-                            }
-                        }
-
-                        if (empty($roomQueues)) {
-                            $seatLayout[$roomId] = [
-                                'room'         => $room,
-                                'invigilators' => [],
-                                'cols'         => [1 => [], 2 => [], 3 => []],
-                            ];
-                            continue;
-                        }
-
-                        // ---------- SEAT PLANNING ----------
-                        // benches: linear 0..(totalBenches-1), later mapped to C1/C2/C3
-                        $benches = array_fill(0, $totalBenches, ['left' => null, 'right' => null]);
-
-                        $remaining = function () use (&$roomQueues) {
-                            $res = [];
-                            foreach ($roomQueues as $key => $queue) {
-                                $res[$key] = count($queue);
-                            }
-                            return $res;
-                        };
-
-                        // Order of papers in this room (faculty-wise)
-                        // Order of papers in this room by highest student_count first
-                        // Order of papers in this room by highest student_count first
-                        $paperCounts = $allocForRoom
-                            ->groupBy(fn($a) => $a->faculty_id . '|' . $a->subject_code)
-                            ->map(fn($group) => $group->sum('student_count')); // total per paper in this room
-
-                        $paperOrder = $paperCounts
-                            ->sortDesc()          // highest total students first
-                            ->keys()
-                            ->values()
-                            ->all();
-
-
-
-                        /**
-                         * PASS 1: LEFT seats
-                         * - For each paper in order, place 1 student per bench
-                         *   continuously (same faculty/subject grouped).
-                         * - Bench order: linear benches 0..N-1
-                         */
-                        $benchIndex = 0;
-
-                        foreach ($paperOrder as $pKey) {
-                            while (
-                                $benchIndex < $totalBenches &&
-                                !empty($roomQueues[$pKey])
-                            ) {
-                                $student = array_shift($roomQueues[$pKey]);
-                                $benches[$benchIndex]['left'] = $student;
-                                $benchIndex++;
-                            }
-                        }
-
-                        /**
-                         * Precompute bench scan order for RIGHT seats:
-                         * Column 2 → Column 1 → Column 3.
-                         */
-                        $benchOrder = [];
-                        $rowsCol1   = (int) $room->rows_col1;
-                        $rowsCol2   = (int) $room->rows_col2;
-                        $rowsCol3   = (int) $room->rows_col3;
-
-                        // Column 2 benches indices
-                        $startC2 = $rowsCol1;
-                        $endC2   = $rowsCol1 + $rowsCol2 - 1;
-                        for ($i = $startC2; $i <= $endC2 && $i < $totalBenches; $i++) {
-                            $benchOrder[] = $i;
-                        }
-
-                        // Column 1 benches indices
-                        for ($i = 0; $i < $rowsCol1 && $i < $totalBenches; $i++) {
-                            $benchOrder[] = $i;
-                        }
-
-                        // Column 3 benches indices
-                        $startC3 = $rowsCol1 + $rowsCol2;
-                        $endC3   = $totalBenches - 1;
-                        for ($i = $startC3; $i <= $endC3 && $i < $totalBenches; $i++) {
-                            $benchOrder[] = $i;
-                        }
-
-                        /**
-                         * PASS 2: RIGHT seats
-                         * - Use benchOrder (C2 → C1 → C3).
-                         * - For each student, first try a bench whose LEFT subject != this subject.
-                         * - If not possible, use any empty right seat in benchOrder.
-                         */
-                        foreach ($paperOrder as $pKey) {
-                            while (!empty($roomQueues[$pKey])) {
-                                $rem = $remaining();
-                                if (array_sum($rem) === 0) {
-                                    break;
-                                }
-
-                                $targetIndex = null;
-
-                                // 1) Prefer bench where right is empty AND left != this subject
-                                foreach ($benchOrder as $i) {
-                                    if (!isset($benches[$i]) || $benches[$i]['right'] !== null) {
-                                        continue;
-                                    }
-                                    $leftKey = $benches[$i]['left']['subject_key'] ?? null;
-                                    if ($leftKey !== $pKey) {
-                                        $targetIndex = $i;
-                                        break;
-                                    }
-                                }
-
-                                // 2) If not found, take ANY bench with empty right (still in benchOrder)
-                                if ($targetIndex === null) {
-                                    foreach ($benchOrder as $i) {
-                                        if (!isset($benches[$i])) {
-                                            continue;
-                                        }
-                                        if ($benches[$i]['right'] === null) {
-                                            $targetIndex = $i;
-                                            break;
-                                        }
-                                    }
-                                }
-
-                                // No more free right seats
-                                if ($targetIndex === null) {
-                                    break;
-                                }
-
-                                $student = array_shift($roomQueues[$pKey]);
-                                $benches[$targetIndex]['right'] = $student;
-                            }
-                        }
-                        // ---------- END SEAT PLANNING ----------
-
-                        // Map benches to 3 columns: C1 rows, then C2, then C3
-                        $cols = [1 => [], 2 => [], 3 => []];
-                        $idx  = 0;
-
-                        for ($row = 1; $row <= $room->rows_col1; $row++) {
-                            if (!isset($benches[$idx])) {
-                                break;
-                            }
-                            $cols[1][$row] = $benches[$idx];
-                            $idx++;
-                        }
-
-                        for ($row = 1; $row <= $room->rows_col2; $row++) {
-                            if (!isset($benches[$idx])) {
-                                break;
-                            }
-                            $cols[2][$row] = $benches[$idx];
-                            $idx++;
-                        }
-
-                        for ($row = 1; $row <= $room->rows_col3; $row++) {
-                            if (!isset($benches[$idx])) {
-                                break;
-                            }
-                            $cols[3][$row] = $benches[$idx];
-                            $idx++;
-                        }
-
-                        // Assign / load invigilators for this room
-                        $invigilators = [];
-
-                        if ($assignFromSelection) {
-                            // Deterministic distribution from selected pool
-                            $neededInv = $room->faculties_per_room ?: 2;
-
-                            if ($neededInv > 0 && $facultyPool->isNotEmpty()) {
-                                $invigilators[] = $facultyPool->shift();
-                                $neededInv--;
-                            }
-
-                            if ($neededInv > 0 && $staffPool->isNotEmpty()) {
-                                $invigilators[] = $staffPool->shift();
-                                $neededInv--;
-                            }
-
-                            while ($neededInv > 0) {
-                                if ($facultyPool->isNotEmpty()) {
-                                    $invigilators[] = $facultyPool->shift();
-                                    $neededInv--;
-                                } elseif ($staffPool->isNotEmpty()) {
-                                    $invigilators[] = $staffPool->shift();
-                                    $neededInv--;
-                                } else {
-                                    break;
-                                }
-                            }
-                        } elseif ($hasSavedInvigilators && isset($savedAssignmentsByRoom[$roomId])) {
-                            // If nothing selected now, but we have saved data -> show saved
-                            $ids = $savedAssignmentsByRoom[$roomId]
-                                ->flatMap(function ($alloc) {
-                                    return is_array($alloc->invigilator_assignments)
-                                        ? $alloc->invigilator_assignments
-                                        : [];
-                                })
-                                ->filter()
-                                ->unique()
-                                ->values()
-                                ->all();
-
-                            if (!empty($ids)) {
-                                $invigilators = $employees->whereIn('id', $ids)->values();
-                            }
-                        }
-
-                        $seatLayout[$roomId] = [
-                            'room'         => $room,
-                            'invigilators' => $invigilators,
-                            'cols'         => $cols,
-                        ];
-                    }
-
-                    // If we used selection to assign invigilators, persist them
-                    if ($assignFromSelection) {
-                        $this->saveInvigilatorAssignments($exam->id, $examDate, $seatLayout);
+                    // If user selected invigilators here, persist mapping
+                    if (!empty($employeeIds)) {
+                        $this->saveInvigilatorAssignments($examId, $examDate, $seatLayout);
                         $hasSavedInvigilators = true;
                     }
                 }
@@ -512,7 +187,6 @@ class SeatPlanController extends Controller
         $batch       = (int) $r->input('batch');
         $employeeIds = json_decode($r->input('employee_ids_json', '[]'), true);
 
-
         $data = $this->generateSeatLayout($examId, $examDate, $batch, $employeeIds, true);
 
         if (!$data['hasData']) {
@@ -533,10 +207,6 @@ class SeatPlanController extends Controller
 
         return $pdf->download("attendance-{$safeDate}.pdf");
     }
-
-    /**
-     * Print attendance sheets (stream – opens in browser).
-     */
 
     private function toRoman($num)
     {
@@ -573,8 +243,7 @@ class SeatPlanController extends Controller
     {
         if (!$sem) return 'N/A';
 
-        $sem = (int) $sem;  // IMPORTANT FIX
-
+        $sem = (int) $sem;
         if ($sem === 0) return 'N/A';
 
         $year = (int) ceil($sem / 2);
@@ -589,6 +258,7 @@ class SeatPlanController extends Controller
         $examDate    = $r->input('exam_date');
         $batch       = (int) $r->input('batch');
         $employeeIds = json_decode($r->input('employee_ids_json', '[]'), true);
+
         $semester = ExamRegistrationSubject::query()
             ->whereHas('registration', function ($q) use ($examId, $batch) {
                 $q->where('exam_id', $examId)
@@ -637,9 +307,6 @@ class SeatPlanController extends Controller
         }
     }
 
-    /**
-     * Build attendance data grouped by room + faculty.
-     */
     /**
      * Build attendance data grouped by room + faculty.
      */
@@ -757,7 +424,7 @@ class SeatPlanController extends Controller
             }
         }
 
-        // 🔥 PAGE NUMBERING PER FACULTY (e.g., BCE 1/2, BAR 1/3)
+        // PAGE NUMBERING PER FACULTY (e.g., BCE 1/2, BAR 1/3)
         $facultyTotals = [];
         foreach ($sheets as $sheet) {
             $code = $sheet['faculty_code'] ?? 'N/A';
@@ -776,15 +443,17 @@ class SeatPlanController extends Controller
             }
             $facultySeen[$code]++;
 
-            $sheet['page_no']    = $facultySeen[$code];        // 1,2,...
-            $sheet['page_total'] = $facultyTotals[$code];      // total pages for that faculty
+            $sheet['page_no']    = $facultySeen[$code];
+            $sheet['page_total'] = $facultyTotals[$code];
         }
         unset($sheet);
 
         return $sheets;
     }
 
-
+    /**
+     * Core seat layout generator.
+     */
     private function generateSeatLayout(
         int $examId,
         string $examDate,
@@ -795,7 +464,7 @@ class SeatPlanController extends Controller
         $exam      = Exam::findOrFail($examId);
         $employees = Employee::where('is_active', true)->get();
 
-        // Load saved invigilator assignments (per room)
+        // Load saved invigilator assignments (per room) if needed
         $savedAssignmentsByRoom = collect();
         if ($loadFromSaved) {
             $savedAssignmentsByRoom = RoomAllocation::where('exam_id', $examId)
@@ -805,13 +474,13 @@ class SeatPlanController extends Controller
                 ->groupBy('room_id');
         }
 
-        // Get allocations for this exam + date
+        // Allocations for this exam + date
         $allocations = RoomAllocation::where('exam_id', $exam->id)
             ->where('exam_date', $examDate)
             ->orderBy('room_id')
-            ->orderBy('faculty_id')      // Add this
-            ->orderBy('subject_code')    // Add this
-            ->orderBy('id')              // Fallback tie-breaker
+            ->orderBy('faculty_id')
+            ->orderBy('subject_code')
+            ->orderBy('id')
             ->get();
 
         if ($allocations->isEmpty()) {
@@ -823,6 +492,7 @@ class SeatPlanController extends Controller
             ->get()
             ->keyBy('id');
 
+        // Build global student lists per paper (faculty_id|subject_code)
         $paperKeys = $allocations->map(fn($a) => $a->faculty_id . '|' . $a->subject_code)
             ->unique()
             ->values();
@@ -861,7 +531,7 @@ class SeatPlanController extends Controller
             ];
         }
 
-        // 🔑 IMPORTANT: only build pools if user actually selected invigilators
+        // Only build pools if user selected invigilators
         $assignFromSelection = !empty($employeeIds);
 
         $staffPool   = collect();
@@ -875,7 +545,7 @@ class SeatPlanController extends Controller
                     ['employee_type', 'desc'],
                     ['full_name', 'asc'],
                 ])->values()
-                : collect();  // 👈 if selection empty, no fallback to ALL employees
+                : collect();
 
             $staffPool   = $basePool->where('employee_type', 'staff')->values();
             $facultyPool = $basePool->where('employee_type', 'faculty')->values();
@@ -887,8 +557,10 @@ class SeatPlanController extends Controller
             $totalBenches = $room->computed_total_benches;
             $allocForRoom = $allocations->where('room_id', $roomId);
 
-            // --- Build student queues per paper for this room ---
-            $roomQueues = [];
+            // --- Build subject queues for this room (ignore faculty for seating order) ---
+            $subjectQueues = [];
+            $subjectCounts = [];
+
             foreach ($allocForRoom as $a) {
                 $pKey   = $a->faculty_id . '|' . $a->subject_code;
                 $needed = (int) $a->student_count;
@@ -906,16 +578,24 @@ class SeatPlanController extends Controller
                 }
 
                 foreach ($slice as $s) {
-                    $roomQueues[$pKey][] = [
+                    $subjectCode = $a->subject_code;
+
+                    if (!isset($subjectQueues[$subjectCode])) {
+                        $subjectQueues[$subjectCode] = [];
+                        $subjectCounts[$subjectCode] = 0;
+                    }
+
+                    $subjectQueues[$subjectCode][] = [
                         'symbol_no'    => $s->registration->exam_roll_no ?? null,
                         'subject_key'  => $pKey,
-                        'subject_code' => $a->subject_code,
+                        'subject_code' => $subjectCode,
                         'faculty_id'   => $a->faculty_id,
                     ];
+                    $subjectCounts[$subjectCode]++;
                 }
             }
 
-            if (empty($roomQueues)) {
+            if (empty($subjectQueues)) {
                 $seatLayout[$roomId] = [
                     'room'         => $room,
                     'invigilators' => [],
@@ -927,33 +607,27 @@ class SeatPlanController extends Controller
             // ---------- SEAT PLANNING ----------
             $benches = array_fill(0, $totalBenches, ['left' => null, 'right' => null]);
 
-            $remaining = function () use (&$roomQueues) {
-                $res = [];
-                foreach ($roomQueues as $key => $queue) {
-                    $res[$key] = count($queue);
+            // Subject order: max students first, then subject_code ASC
+            $subjectOrder = array_keys($subjectCounts);
+            usort($subjectOrder, function ($a, $b) use ($subjectCounts) {
+                if ($subjectCounts[$a] !== $subjectCounts[$b]) {
+                    return $subjectCounts[$b] <=> $subjectCounts[$a]; // DESC
                 }
-                return $res;
-            };
+                return strcmp($a, $b);
+            });
 
-            // Order of papers in this room by highest student_count first
-            $paperCounts = $allocForRoom
-                ->groupBy(fn($a) => $a->faculty_id . '|' . $a->subject_code)
-                ->map(fn($group) => $group->sum('student_count')); // total per paper in this room
+            $rowsCol1 = (int) $room->rows_col1;
+            $rowsCol2 = (int) $room->rows_col2;
+            $rowsCol3 = (int) $room->rows_col3;
 
-            $paperOrder = $paperCounts
-                ->sortDesc()          // highest total students first
-                ->keys()
-                ->values()
-                ->all();
-
-            // PASS 1: LEFT seats
+            // PASS 1: LEFT seats – simple linear benches 0..N-1 by subjectOrder
             $benchIndex = 0;
-            foreach ($paperOrder as $pKey) {
+            foreach ($subjectOrder as $code) {
                 while (
                     $benchIndex < $totalBenches &&
-                    !empty($roomQueues[$pKey])
+                    !empty($subjectQueues[$code])
                 ) {
-                    $student = array_shift($roomQueues[$pKey]);
+                    $student = array_shift($subjectQueues[$code]);
                     $benches[$benchIndex]['left'] = $student;
                     $benchIndex++;
                 }
@@ -961,95 +635,112 @@ class SeatPlanController extends Controller
 
             // Precompute bench order: Column 2 → Column 1 → Column 3
             $benchOrder = [];
-            $rowsCol1   = (int) $room->rows_col1;
-            $rowsCol2   = (int) $room->rows_col2;
-            $rowsCol3   = (int) $room->rows_col3;
 
+            // C2 indices
             $startC2 = $rowsCol1;
             $endC2   = $rowsCol1 + $rowsCol2 - 1;
             for ($i = $startC2; $i <= $endC2 && $i < $totalBenches; $i++) {
                 $benchOrder[] = $i;
             }
 
+            // C1 indices
             for ($i = 0; $i < $rowsCol1 && $i < $totalBenches; $i++) {
                 $benchOrder[] = $i;
             }
 
+            // C3 indices
             $startC3 = $rowsCol1 + $rowsCol2;
             $endC3   = $totalBenches - 1;
             for ($i = $startC3; $i <= $endC3 && $i < $totalBenches; $i++) {
                 $benchOrder[] = $i;
             }
 
-            // PASS 2: RIGHT seats in benchOrder
-            foreach ($paperOrder as $pKey) {
-                while (!empty($roomQueues[$pKey])) {
-                    $rem = $remaining();
-                    if (array_sum($rem) === 0) {
-                        break;
-                    }
-
+            // PASS 2: RIGHT seats – avoid same subject; if forced, only in Column 2
+            foreach ($subjectOrder as $code) {
+                while (!empty($subjectQueues[$code])) {
                     $targetIndex = null;
 
+                    // 1) Prefer benches where RIGHT empty AND LEFT.subject_code != this subject
                     foreach ($benchOrder as $i) {
                         if (!isset($benches[$i]) || $benches[$i]['right'] !== null) {
                             continue;
                         }
-                        $leftKey = $benches[$i]['left']['subject_key'] ?? null;
-                        if ($leftKey !== $pKey) {
+
+                        $leftCode = $benches[$i]['left']['subject_code'] ?? null;
+                        if ($leftCode !== $code) {
                             $targetIndex = $i;
                             break;
                         }
                     }
 
+                    // 2) If we must place same-subject pair → only in Column 2
                     if ($targetIndex === null) {
                         foreach ($benchOrder as $i) {
-                            if (!isset($benches[$i])) {
+                            if (!isset($benches[$i]) || $benches[$i]['right'] !== null) {
                                 continue;
                             }
-                            if ($benches[$i]['right'] === null) {
+
+                            // Column 2 indices range
+                            if ($i >= $rowsCol1 && $i < $rowsCol1 + $rowsCol2) {
                                 $targetIndex = $i;
                                 break;
                             }
                         }
                     }
 
+                    // 3) Final fallback: any free right seat (if even C2 is full)
                     if ($targetIndex === null) {
-                        break;
+                        foreach ($benchOrder as $i) {
+                            if (!isset($benches[$i]) || $benches[$i]['right'] !== null) {
+                                continue;
+                            }
+                            $targetIndex = $i;
+                            break;
+                        }
                     }
 
-                    $student = array_shift($roomQueues[$pKey]);
+                    if ($targetIndex === null) {
+                        // Room completely full on right side
+                        break 2;
+                    }
+
+                    $student = array_shift($subjectQueues[$code]);
                     $benches[$targetIndex]['right'] = $student;
                 }
             }
             // ---------- END SEAT PLANNING ----------
 
+            // Map benches to 3 columns: C1 rows, then C2, then C3
             $cols = [1 => [], 2 => [], 3 => []];
             $idx  = 0;
 
-            for ($row = 1; $row <= $room->rows_col1; $row++) {
+            for ($row = 1; $row <= $rowsCol1; $row++) {
                 if (!isset($benches[$idx])) break;
                 $cols[1][$row] = $benches[$idx];
                 $idx++;
             }
 
-            for ($row = 1; $row <= $room->rows_col2; $row++) {
+            for ($row = 1; $row <= $rowsCol2; $row++) {
                 if (!isset($benches[$idx])) break;
                 $cols[2][$row] = $benches[$idx];
                 $idx++;
             }
 
-            for ($row = 1; $row <= $room->rows_col3; $row++) {
+            for ($row = 1; $row <= $rowsCol3; $row++) {
                 if (!isset($benches[$idx])) break;
                 $cols[3][$row] = $benches[$idx];
                 $idx++;
             }
 
-            // --------- INVIGILATOR ASSIGNMENT (fixed) ----------
+            $invCount = (int) ($allocForRoom->first()->invigilator_count
+                ?? $room->faculties_per_room
+                ?? 2);
+
+            // --------- INVIGILATOR ASSIGNMENT ----------
             $invigilators = [];
 
             if ($loadFromSaved && isset($savedAssignmentsByRoom[$roomId])) {
-                // ✅ Use saved mapping if available
+                // Use saved mapping if available
                 $ids = $savedAssignmentsByRoom[$roomId]
                     ->flatMap(function ($alloc) {
                         return is_array($alloc->invigilator_assignments)
@@ -1065,8 +756,7 @@ class SeatPlanController extends Controller
                     $invigilators = $employees->whereIn('id', $ids)->values();
                 }
             } elseif ($assignFromSelection) {
-                // ✅ Only assign from selection if user actually chose something
-                $neededInv = $room->faculties_per_room ?: 2;
+                $neededInv = $invCount;
 
                 if ($neededInv > 0 && $facultyPool->isNotEmpty()) {
                     $invigilators[] = $facultyPool->shift();
@@ -1089,9 +779,7 @@ class SeatPlanController extends Controller
                         break;
                     }
                 }
-                // If selection is too small, some rooms just have fewer/no invigilators — which is expected.
             }
-            // ELSE: no saved & no selection → leave invigilators empty.
 
             $seatLayout[$roomId] = [
                 'room'         => $room,
@@ -1110,6 +798,7 @@ class SeatPlanController extends Controller
             'paperInfo'  => $paperInfo,
         ];
     }
+
     public function printInvigilatorMap(Request $r)
     {
         $examId      = (int) $r->input('exam_id');
@@ -1117,7 +806,6 @@ class SeatPlanController extends Controller
         $batch       = (int) $r->input('batch');
         $employeeIds = json_decode($r->input('employee_ids_json', '[]'), true);
 
-        // Use your existing generator
         $data = $this->generateSeatLayout($examId, $examDate, $batch, $employeeIds, true);
 
         if (!$data['hasData']) {
@@ -1169,7 +857,6 @@ class SeatPlanController extends Controller
             'invigilatorMap' => $invigilatorMap,
         ])->setPaper('a4', 'portrait');
 
-        // 👇 This opens in browser instead of downloading
         return $pdf->stream("invigilators-{$safeDate}.pdf");
     }
 }

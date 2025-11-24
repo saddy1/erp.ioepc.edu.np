@@ -13,11 +13,76 @@ use App\Models\{
     RoomAllocation,
     Routine,
     ExamRegistrationSubject,
-    RoutineSlot
+    ExamSeat,
+
 };
 
 class SeatPlanController extends Controller
 {
+
+    /**
+ * Sync exam_seats table with current seatLayout.
+ * Avoids duplicates and makes layout reusable.
+ */
+private function syncExamSeats(array $data): void
+{
+    if (empty($data['hasData']) || !$data['hasData']) {
+        return;
+    }
+
+    $exam     = $data['exam'];
+    $examDate = $data['examDate'];
+    $batch    = $data['batch'];
+    $layout   = $data['seatLayout'];
+
+    // Delete old seats for this exam/date/batch (fresh snapshot)
+    ExamSeat::where('exam_id', $exam->id)
+        ->where('exam_date', $examDate)
+        ->where('batch', $batch)
+        ->delete();
+
+    $rows = [];
+
+    foreach ($layout as $roomId => $roomData) {
+        $room = $roomData['room'];
+        $cols = $roomData['cols'];
+
+        foreach ($cols as $colNo => $rowsArr) {
+            foreach ($rowsArr as $rowNo => $bench) {
+                foreach (['left' => 'L', 'right' => 'R'] as $sideKey => $sideVal) {
+                    $student = $bench[$sideKey] ?? null;
+                    if (!$student || empty($student['symbol_no'])) {
+                        continue;
+                    }
+
+                    $rows[] = [
+                        'exam_id'      => $exam->id,
+                        'exam_date'    => $examDate,
+                        'batch'        => $batch,
+                        'room_id'      => $room->id,
+                        'faculty_id'   => $student['faculty_id'] ?? null,
+                        'subject_code' => $student['subject_code'] ?? '',
+                        'symbol_no'    => $student['symbol_no'],
+                        'column_no'    => (int) $colNo,
+                        'row_no'       => (int) $rowNo,
+                        'side'         => $sideVal,
+                        'bench_index'  => 0, // optional; if you want true index, pass it from generator
+                        'created_at'   => now(),
+                        'updated_at'   => now(),
+                    ];
+                }
+            }
+        }
+    }
+
+    if (!empty($rows)) {
+        // Bulk insert for performance
+        foreach (array_chunk($rows, 1000) as $chunk) {
+            ExamSeat::insert($chunk);
+        }
+    }
+}
+
     public function index(Request $r)
     {
         $examId      = (int) $r->query('exam_id', 0);
@@ -168,6 +233,9 @@ class SeatPlanController extends Controller
         }
 
         $this->saveInvigilatorAssignments($examId, $examDate, $data['seatLayout']);
+
+        $this->syncExamSeats($data);
+
 
         $safeDate = str_replace(['/', '\\'], '-', $examDate);
 

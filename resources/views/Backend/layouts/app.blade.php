@@ -149,6 +149,12 @@
                                 <i class="fas fa-door-open w-5 text-gray-300"></i><span>Seatplan</span>
                             </a>
                         </li>
+                        <li>
+                            <a href="{{ route('exam_attendance.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
+                                <i class="fas fa-door-open w-5 text-gray-300"></i><span>Student Attendance</span>
+                            </a>
+                        </li>
+
                     @endif
 
                   

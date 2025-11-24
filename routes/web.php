@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\RoutineBuilderController;
 use App\Http\Controllers\Admin\EmployeeController;
 use App\Http\Controllers\Admin\StudentImportController;
 use App\Http\Controllers\Admin\RoomAllocationController;
+use App\Http\Controllers\Admin\ExamAttendanceController;    
 
 
 /*
@@ -101,6 +102,15 @@ Route::group(['middleware' => 'admin.auth'], function () {
             '/admin/seat-plans/invigilators/print',
             [SeatPlanController::class, 'printInvigilatorMap']
         )->name('seat_plans.print_invigilators');
+
+        Route::get('exam-attendance', [ExamAttendanceController::class, 'index'])
+        ->name('exam_attendance.index');
+
+    Route::post('exam-attendance/save', [ExamAttendanceController::class, 'store'])
+        ->name('admin.exam_attendance.store');
+
+    Route::get('exam-attendance/packets/download', [ExamAttendanceController::class, 'downloadAllPackets'])
+        ->name('admin.exam_attendance.download_packets');
     });
 
     Route::get('faculty-subjects', [FacultySubjectController::class, 'index'])->name('faculty_subjects.index');

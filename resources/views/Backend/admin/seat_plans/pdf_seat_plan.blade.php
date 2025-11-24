@@ -67,7 +67,7 @@
         }
 
         .room-title {
-            font-size: 16px;
+            font-size: 28px;
             font-weight: bold;
             color: #222;
         }
@@ -231,6 +231,7 @@
             {{-- One page per room --}}
             <div class="page-wrapper-room {{ !$loop->first ? 'page-break-before' : '' }}">
                 <!-- MAIN HEADER -->
+                 <div class="room-title">Room {{ $room->room_no }}</div>
                 <div class="main-header">
                     <div class="main-header-title">Examination Seat Plan</div>
                     <div class="main-header-meta">
@@ -248,21 +249,7 @@
                 </div>
 
                 <div class="room-card">
-                    <!-- ROOM HEADER -->
-                    <div class="room-header">
-                        <table class="room-header-top">
-                            <tr>
-                                <td>
-                                    <div class="room-title">Room {{ $room->room_no }}</div>
-                                    <div class="room-meta">
-                                        Benches: <strong>{{ $room->computed_total_benches }}</strong>
-                                        • Seats: <strong>{{ $room->computed_total_seats }}</strong>
-                                    </div>
-                                </td>
-                                {{-- invigilators section if you want to show it --}}
-                            </tr>
-                        </table>
-                    </div>
+                  
 
                     <!-- COLUMNS TABLE -->
                     <table class="columns-table">

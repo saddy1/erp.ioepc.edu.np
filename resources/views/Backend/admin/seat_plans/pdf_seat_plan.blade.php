@@ -8,105 +8,80 @@
     <style>
         @page {
             size: A4 landscape;
-            margin: 8mm;
+            margin: 6mm;
         }
 
         * {
             box-sizing: border-box;
+            margin: 0;
+            padding: 0;
         }
 
         body {
             font-family: Arial, Helvetica, sans-serif;
-            font-size: 11px;
+            font-size: 9px;
             color: #111;
         }
 
         .page-wrapper {
-            padding: 10px 12px;
+            padding: 5px 8px;
         }
 
         /* ===== MAIN HEADER ===== */
         .main-header {
             text-align: center;
-            margin-bottom: 12px;
-            padding: 8px;
-            border: 2px solid #000;
+            margin-bottom: 6px;
+            padding: 5px;
+            border: 1.5px solid #000;
             background: #f3f3f3;
         }
 
         .main-header-title {
-            font-size: 18px;
+            font-size: 13px;
             font-weight: bold;
             text-transform: uppercase;
-            letter-spacing: .06em;
-            margin-bottom: 4px;
+            letter-spacing: .04em;
+            margin-bottom: 2px;
         }
 
         .main-header-meta {
-            font-size: 11px;
-            line-height: 1.3;
+            font-size: 8px;
+            line-height: 1.2;
         }
 
         /* ===== ROOM HEADER ===== */
         .room-card {
-            margin-bottom: 18px;
-            page-break-inside: avoid;
-        }
-
-        .room-header {
-            border-radius: 6px;
-            border: 2px solid #c4c4c4;
-            background: #f0f0f0;
-            padding: 8px 10px;
-            margin-bottom: 8px;
-        }
-
-        .room-header-top {
-            width: 100%;
-            border-collapse: collapse;
+            margin-bottom: 10px;
         }
 
         .room-title {
-            font-size: 28px;
+            font-size: 20px;
             font-weight: bold;
             color: #222;
+            margin-bottom: 4px;
         }
 
-        .room-meta {
-            margin-top: 3px;
-            font-size: 10px;
-            color: #165b25;
+        /* ===== TWO COLUMN LAYOUT TABLE ===== */
+        .two-column-table {
+            width: 100%;
+            border-collapse: collapse;
+            page-break-after: always;
+            margin-bottom: 15px;
         }
 
-        .invigilator-label {
-            font-size: 10px;
-            color: #666;
-            margin-bottom: 2px;
-            text-align: right;
+        .two-column-table td {
+            width: 50%;
+            vertical-align: top;
+            padding: 0 4px;
         }
 
-        .invigilator-badges span {
-            display: inline-block;
-            border-radius: 999px;
-            padding: 3px 7px;
-            font-size: 10px;
-            font-weight: 600;
-            border: 1px solid;
-            white-space: nowrap;
-            margin-left: 3px;
-            margin-bottom: 3px;
+        .two-column-table td:first-child {
+            border-right: 2px dashed #888;
+            padding-right: 8px;
         }
 
-        .badge-faculty {
-            background: #e5f5e8;
-            border-color: #8cc79b;
-            color: #256331;
-        }
-
-        .badge-staff {
-            background: #f0e6ff;
-            border-color: #c19af9;
-            color: #5b2ca0;
+        .two-column-table td:last-child {
+            padding-left: 8px;
         }
 
         /* ===== OUTER COLUMNS TABLE ===== */
@@ -117,20 +92,18 @@
 
         .columns-table th {
             text-align: left;
-            font-size: 12px;
+            font-size: 9px;
             font-weight: bold;
             color: #555;
-            border-bottom: 2px solid #d0d0d0;
-            padding-bottom: 4px;
+            border-bottom: 1.5px solid #d0d0d0;
+            padding-bottom: 3px;
+            padding-right: 4px;
         }
 
         .columns-table td {
             vertical-align: top;
-            padding-top: 8px;
-        }
-
-        .col-spacing {
-            padding-right: 10px;
+            padding-top: 4px;
+            padding-right: 4px;
         }
 
         /* ===== INNER TABLE: ONE ROW (R1) IN ONE COLUMN ===== */
@@ -140,12 +113,12 @@
         }
 
         .row-label-cell {
-            width: 22px;
-            font-size: 10px;
+            width: 16px;
+            font-size: 8px;
             font-weight: bold;
             color: #777;
             vertical-align: top;
-            padding-right: 4px;
+            padding-right: 3px;
             white-space: nowrap;
         }
 
@@ -155,10 +128,11 @@
 
         /* ===== BENCH WRAPPER (BOX) ===== */
         .bench-wrapper {
-            border: 2px solid #d0d0d0;
+            border: 1.5px solid #d0d0d0;
             background: #f6f6f6;
-            border-radius: 10px;
-            padding: 4px 5px;
+            border-radius: 6px;
+            padding: 2px 3px;
+            margin-bottom: 2px;
         }
 
         .bench-wrapper.same-subject {
@@ -179,12 +153,12 @@
 
         .bench-inner-table td {
             border: 1px solid #dddddd;
-            padding: 5px 6px;
+            padding: 3px 4px;
         }
 
         .bench-symbol-left {
             font-family: "Courier New", monospace;
-            font-size: 15px;
+            font-size: 11px;
             font-weight: bold;
             text-align: left;
             width: 50%;
@@ -192,7 +166,7 @@
 
         .bench-symbol-right {
             font-family: "Courier New", monospace;
-            font-size: 15px;
+            font-size: 11px;
             font-weight: bold;
             text-align: right;
             width: 50%;
@@ -201,130 +175,134 @@
         /* ===== FOOTER ===== */
         .footer {
             text-align: center;
-            font-size: 9px;
+            font-size: 7px;
             color: #666;
             border-top: 1px solid #bfbfbf;
-            padding-top: 6px;
-            margin-top: 12px;
+            padding-top: 4px;
+            margin-top: 8px;
         }
-          .page-wrapper-room {
-        page-break-inside: avoid;
-    }
-
-    .page-break-before {
-        page-break-before: always;
-    }
     </style>
 </head>
 
 <body>
     <div class="page-wrapper">
 
-        @foreach ($seatLayout as $roomId => $data)
-            @php
-                $room = $data['room'];
-                $cols = $data['cols'];
-                $invigilators = $data['invigilators'] ?? [];
-                $maxRows = max(count($cols[1] ?? []), count($cols[2] ?? []), count($cols[3] ?? []));
-            @endphp
+        @php
+        $chunks = array_chunk($seatLayout, 2, true);
+        @endphp
 
-            {{-- One page per room --}}
-            <div class="page-wrapper-room {{ !$loop->first ? 'page-break-before' : '' }}">
-                <!-- MAIN HEADER -->
-                 <div class="room-title">Room {{ $room->room_no }}</div>
-                <div class="main-header">
-                    <div class="main-header-title">Examination Seat Plan</div>
-                    <div class="main-header-meta">
-                        <strong>{{ $exam->exam_title }}</strong> |
-                        Semester: {{ $exam->semester }} |
-                        Batch: {{ ucfirst($exam->batch) }} |
-                        Date: <strong>{{ $examDate }}</strong>
-                        @if ($exam->start_time && $exam->end_time)
-                            | Time:
-                            {{ \Carbon\Carbon::parse($exam->start_time)->format('h:i A') }}
-                            -
-                            {{ \Carbon\Carbon::parse($exam->end_time)->format('h:i A') }}
-                        @endif
-                    </div>
-                </div>
+        @foreach ($chunks as $chunkIndex => $chunk)
+            <table class="two-column-table">
+                <tr>
+                    @foreach ($chunk as $roomId => $data)
+                        @php
+                            $room = $data['room'];
+                            $cols = $data['cols'];
+                            $invigilators = $data['invigilators'] ?? [];
+                            $maxRows = max(count($cols[1] ?? []), count($cols[2] ?? []), count($cols[3] ?? []));
+                        @endphp
 
-                <div class="room-card">
-                  
+                        <td>
+                            <!-- ROOM TITLE -->
+                            <div class="room-title">Room {{ $room->room_no }}</div>
 
-                    <!-- COLUMNS TABLE -->
-                    <table class="columns-table">
-                        <thead>
-                            <tr>
-                                <th class="col-spacing">Column 1</th>
-                                <th class="col-spacing">Column 2</th>
-                                <th>Column 3</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @for ($rowIdx = 1; $rowIdx <= $maxRows; $rowIdx++)
-    <tr>
-        @for ($c = 1; $c <= 3; $c++)
-            @php
-                $rows  = $cols[$c] ?? [];
-                $bench = $rows[$rowIdx] ?? null;
-
-                $left  = $bench['left'] ?? null;
-                $right = $bench['right'] ?? null;
-
-                $sameSubject = $left && $right && $left['subject_code'] === $right['subject_code'];
-
-                // ⭐ Column 3: if exactly one student on this bench, show on RIGHT side
-                if ($c === 3 && $bench) {
-                    $hasLeft  = !empty($left);
-                    $hasRight = !empty($right);
-
-                    if ($hasLeft && !$hasRight) {
-                        // Move student visually to right & clear left
-                        $right = $left;
-                        $left  = null;
-                    }
-                }
-            @endphp
-
-            <td class="{{ $c < 3 ? 'col-spacing' : '' }}">
-                <table class="bench-row-table">
-                    <tr>
-                        <td class="row-label-cell">R{{ $rowIdx }}</td>
-                        <td class="bench-cell">
-                            @if ($bench)
-                                <div class="bench-wrapper {{ $sameSubject ? 'same-subject' : '' }}">
-                                    <table class="bench-inner-table">
-                                        <tr>
-                                            <td class="bench-symbol-left">
-                                                @if ($left && !empty($left['symbol_no']))
-                                                    {{ $left['symbol_no'] }}
-                                                @else
-                                                    &mdash;
-                                                @endif
-                                            </td>
-                                            <td class="bench-symbol-right">
-                                                @if ($right && !empty($right['symbol_no']))
-                                                    {{ $right['symbol_no'] }}
-                                                @else
-                                                    &mdash;
-                                                @endif
-                                            </td>
-                                        </tr>
-                                    </table>
+                            <!-- EXAM HEADER -->
+                            <div class="main-header">
+                                <div class="main-header-title">Examination Seat Plan</div>
+                                <div class="main-header-meta">
+                                    <strong>{{ $exam->exam_title }}</strong> |
+                                    Sem: {{ $exam->semester }} |
+                                    Batch: {{ ucfirst($exam->batch) }} |
+                                    Date: <strong>{{ $examDate }}</strong>
+                                    @if ($exam->start_time && $exam->end_time)
+                                        | Time:
+                                        {{ \Carbon\Carbon::parse($exam->start_time)->format('h:i A') }}
+                                        -
+                                        {{ \Carbon\Carbon::parse($exam->end_time)->format('h:i A') }}
+                                    @endif
                                 </div>
-                            @endif
-                        </td>
-                    </tr>
-                </table>
-            </td>
-        @endfor
-    </tr>
-@endfor
+                            </div>
 
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                            <!-- SEATING LAYOUT -->
+                            <div class="room-card">
+                                <table class="columns-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Column 1</th>
+                                            <th>Column 2</th>
+                                            <th>Column 3</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+
+                                        @for ($rowIdx = 1; $rowIdx <= $maxRows; $rowIdx++)
+                                            <tr>
+                                                @for ($c = 1; $c <= 3; $c++)
+                                                    @php
+                                                        $rows  = $cols[$c] ?? [];
+                                                        $bench = $rows[$rowIdx] ?? null;
+
+                                                        $left  = $bench['left'] ?? null;
+                                                        $right = $bench['right'] ?? null;
+                                                        $sameSubject = $left && $right && $left['subject_code'] === $right['subject_code'];
+
+                                                        if ($c === 3 && $bench) {
+                                                            $hasLeft  = !empty($left);
+                                                            $hasRight = !empty($right);
+                                                            if ($hasLeft && !$hasRight) {
+                                                                $right = $left;
+                                                                $left = null;
+                                                            }
+                                                        }
+                                                    @endphp
+
+                                                    <td>
+                                                        <table class="bench-row-table">
+                                                            <tr>
+                                                                <td class="row-label-cell">R{{ $rowIdx }}</td>
+                                                                <td class="bench-cell">
+                                                                    @if ($bench)
+                                                                        <div class="bench-wrapper {{ $sameSubject ? 'same-subject' : '' }}">
+                                                                            <table class="bench-inner-table">
+                                                                                <tr>
+                                                                                    <td class="bench-symbol-left">
+                                                                                        @if ($left && !empty($left['symbol_no']))
+                                                                                            {{ $left['symbol_no'] }}
+                                                                                        @else
+                                                                                            —
+                                                                                        @endif
+                                                                                    </td>
+                                                                                    <td class="bench-symbol-right">
+                                                                                        @if ($right && !empty($right['symbol_no']))
+                                                                                            {{ $right['symbol_no'] }}
+                                                                                        @else
+                                                                                            —
+                                                                                        @endif
+                                                                                    </td>
+                                                                                </tr>
+                                                                            </table>
+                                                                        </div>
+                                                                    @endif
+                                                                </td>
+                                                            </tr>
+                                                        </table>
+                                                    </td>
+                                                @endfor
+                                            </tr>
+                                        @endfor
+
+                                    </tbody>
+                                </table>
+                            </div>
+                        </td>
+                    @endforeach
+
+                    {{-- If only one room in chunk, add empty cell --}}
+                    @if (count($chunk) == 1)
+                        <td></td>
+                    @endif
+                </tr>
+            </table>
         @endforeach
 
         <div class="footer">
@@ -333,6 +311,5 @@
         </div>
     </div>
 </body>
-
 
 </html>

@@ -217,22 +217,34 @@
 
             @endforeach
 
-            {{-- SAVE ENTIRE FACULTY --}}
-            <div class="flex items-center justify-between">
-                <button type="submit"
-                        class="rounded-lg bg-gray-900 text-white px-4 py-2 text-xs sm:text-sm font-semibold hover:bg-gray-800">
-                    Save Attendance (All Rooms)
-                </button>
+         <div class="flex items-center justify-between flex-wrap gap-2">
+    <button type="submit"
+            class="rounded-lg bg-gray-900 text-white px-4 py-2 text-xs sm:text-sm font-semibold hover:bg-gray-800">
+        Save Attendance (All Rooms)
+    </button>
 
-                <a href="{{ route('admin.exam_attendance.download_packets', [
-                        'exam_id' => $examId,
-                        'exam_date' => $examDate,
-                        'batch' => $batch
-                    ]) }}"
-                   class="rounded-lg bg-blue-600 text-white px-4 py-2 text-xs sm:text-sm font-semibold hover:bg-blue-700">
-                    Download All Packet Forms (PDF)
-                </a>
-            </div>
+    <div class="flex gap-2">
+        <a href="{{ route('admin.exam_attendance.download_packets', [
+                'exam_id'   => $examId,
+                'exam_date' => $examDate,
+                'batch'     => $batch,
+            ]) }}"
+           class="rounded-lg bg-blue-600 text-white px-4 py-2 text-xs sm:text-sm font-semibold hover:bg-blue-700">
+            Download All Packet Forms (PDF)
+        </a>
+
+        <a href="{{ route('admin.exam_attendance.summary_letter', [
+                'exam_id'   => $examId,
+                'exam_date' => $examDate,
+                'batch'     => $batch,
+            ]) }}"
+           target="_blank"
+           class="rounded-lg bg-emerald-600 text-white px-4 py-2 text-xs sm:text-sm font-semibold hover:bg-emerald-700">
+            Print Final Letter (PDF)
+        </a>
+    </div>
+</div>
+
 
         </form>
     @endif

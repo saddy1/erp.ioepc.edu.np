@@ -7,7 +7,7 @@
 
     <style>
         @page {
-            size: A4 landscape;
+            size: A4 Potrate;
             margin: 6mm;
         }
 

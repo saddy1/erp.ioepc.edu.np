@@ -104,58 +104,17 @@
                             <i class="fas fa-university w-5 text-gray-300"></i><span>Faculties</span>
                         </a>
                     </li>
-                    <li>
-                            <a href="{{ route('employees.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
-                                <i class="fas fa-users w-5 text-gray-300"></i><span>Invigilator</span>
-                            </a>
-                    </li>
+                    
                     
                          <li>
                         <a href="{{ route('faculty_subjects.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
                             <i class="fas fa-book w-5 text-gray-300"></i><span>Faculty Subjects</span>
                         </a>
                     </li>
-                        <li>
-                            <a href="{{ route('exams.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
-                                <i class="fas fa-file-alt w-5 text-gray-300"></i><span>Exams</span>
-                            </a>
-                    
-                     <li>
-                        <a href="{{ route('routine.builder.create') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
-                            <i class="fas fa-calendar-alt w-5 text-gray-300"></i><span>Create Routines</span>
-                        </a>
-                    </li>
-                    <li>
-                        <a href="{{ route('students.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
-                            <i class="fas fa-user-graduate w-5 text-gray-300"></i><span>Students</span>
-                        </a>
-                    </li>
+                        
                         
                
-                   <li>
-                        <a href="{{ route('room_allocations.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
-                            <i class="fas fa-cog w-5 text-gray-300"></i><span>Room Plan</span>
-                        </a>
-                    </li>
-                <li>
-                        <a href="{{ route('routines.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
-                            <i class="fas fa-calendar-alt w-5 text-gray-300"></i><span>Routines</span>
-                        </a>
-                    </li>
-                  
-                    @if(!empty($admin) && ($admin->is_super_admin ?? false))
-                        <li>
-                            <a href="{{ route('seat_plans.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
-                                <i class="fas fa-door-open w-5 text-gray-300"></i><span>Seatplan</span>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="{{ route('exam_attendance.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
-                                <i class="fas fa-door-open w-5 text-gray-300"></i><span>Student Attendance</span>
-                            </a>
-                        </li>
-
-                    @endif
+                   
 
                   
 

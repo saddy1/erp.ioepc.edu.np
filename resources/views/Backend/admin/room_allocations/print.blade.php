@@ -2,437 +2,256 @@
 <html>
 <head>
     <meta charset="utf-8">
-    @php
-        try {
-            $formattedExamDate = \Carbon\Carbon::createFromFormat('d/m/Y', $examDate)->format('Y-m-d');
-        } catch (\Exception $e) {
-            try {
-                $formattedExamDate = \Carbon\Carbon::parse($examDate)->format('Y-m-d');
-            } catch (\Exception $e) {
-                $formattedExamDate = $examDate;
-            }
-        }
-    @endphp
-    <title>Room Allocation - {{ $exam->exam_title }} ({{ $formattedExamDate }})</title>
+    <title>Exam Packets - {{ $exam->exam_title }} ({{ $examDate }})</title>
     <style>
-        /* Page setup: A4 Landscape */
         @page {
-            size: A4 landscape;
-            margin: 6mm 6mm 8mm 6mm; /* top right bottom left */
+            size: A4 portrait;
+            margin: 15mm 15mm 18mm 15mm;
         }
 
         * {
-            font-family: DejaVu Sans, sans-serif;
-            font-size: 9px;
             box-sizing: border-box;
-            font-weight: 600;
-            line-height: 1.2;
+            font-family: DejaVu Sans, sans-serif;
         }
 
         body {
             margin: 0;
             padding: 0;
-            color: #000;
-            background: #fff;
-        }
-
-        .wrapper {
-            padding: 4mm 4mm 3mm 4mm; /* inner padding inside page */
-            transform-origin: top left;
-            transform: scale(0.95); /* slight scale to help fit one A4 page */
-        }
-
-        /* Header Styles */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            border-bottom: 2px solid #000;
-            padding-bottom: 4px;
-            margin-bottom: 6px;
-        }
-
-        .header-left h1 {
-            font-size: 16px;
-            font-weight: 700;
-            color: #000;
-            margin: 0 0 2px 0;
-            letter-spacing: -0.3px;
-        }
-
-        .header-meta {
             font-size: 10px;
             color: #000;
         }
 
-        .header-meta div {
-            margin-bottom: 1px;
-        }
-
-        .header-meta span {
-            font-weight: 800;
-            color: #000;
-        }
-
-        .header-right {
-            display: flex;
-            gap: 15px;
-        }
-
-        .header-right-box {
-            text-align: right;
-            padding: 6px 8px;
-            background: transparent;
-            border-radius: 4px;
-            border: 1px solid #000;
-        }
-
-        .header-right-box .label {
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            color: #000;
-            margin-bottom: 2px;
-        }
-
-        .header-right-box .value {
-            font-size: 13px;
-            font-weight: 700;
-            color: #000;
-        }
-
-        /* Table Styles */
-        table {
-            border-collapse: collapse;   /* simpler for PDF */
+        .page {
             width: 100%;
-            table-layout: fixed;        /* force columns to fit page width */
         }
 
-        th, td {
-            padding: 4px 4px;
-            vertical-align: middle;
-            border: 1px solid #000;
-            word-wrap: break-word;      /* allow wrapping in cells */
+        .page-break {
+            page-break-after: always;
         }
 
-        thead th {
-            background: transparent;
-            color: #000;
-            font-weight: 600;
-            font-size: 9px;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-            border: 1px solid #000;
+        h1, h2, h3, h4 {
+            margin: 0;
+            padding: 0;
         }
 
-        thead th:first-child {
-            width: 90px;                /* narrower room col */
+        .letter-header {
+            text-align: center;
+            margin-bottom: 10px;
         }
 
-        thead th:last-child {
-            width: 95px;                /* room total col */
-        }
-
-        thead th .subject-code {
-            font-size: 10px;
+        .letter-header .college-name {
+            font-size: 14px;
             font-weight: 700;
-            margin-bottom: 1px;
         }
 
-        thead th .subject-name {
-            font-size: 8px;
-            font-weight: 400;
-            margin-bottom: 1px;
-        }
-
-        thead th .faculty-code {
-            font-size: 9px;
-            padding: 1px 3px;
-            border-radius: 2px;
-            display: inline-block;
-            margin-top: 1px;
-            background: transparent;
-            color: #000;
-        }
-
-        thead th .total-badge {
-            font-size: 9px;
-            margin-top: 1px;
-            padding: 2px 3px;
-            border-radius: 8px;
-            display: inline-block;
-            background: transparent;
-            color: #000;
-        }
-
-        tbody td {
-            font-size: 10px;
-        }
-
-        tbody td:first-child {
-            font-weight: 500;
-        }
-
-        .room-info .room-no {
-            font-size: 11px;
-            font-weight: 700;
-            color: #000;
-            margin-bottom: 2px;
-            text-align: center;
-        }
-
-        .room-info .room-details {
-            font-size: 8px;
-            color: #000;
-            line-height: 1.3;
-        }
-
-        .text-center {
-            text-align: center;
-        }
-
-        /* Pills/Badges */
-        .pill {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 12px;
-            font-weight: 600;
-            font-size: 10px;
-            border: 1px solid #000;
-            background: transparent;
-            color: #000;
-        }
-
-        /* Subject total row */
-        .subject-total-row {
-            font-weight: 600;
-        }
-
-        .subject-total-row td {
-            padding: 6px;
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 40px 20px;
-            border-radius: 8px;
-            border: 1px dashed #000;
+        .letter-header .title {
+            margin-top: 6px;
             font-size: 12px;
-            color: #000;
+            font-weight: 700;
+            text-decoration: underline;
         }
 
-        /* Footer */
-        .footer {
-            margin-top: 8px;
-            padding-top: 6px;
-            border-top: 1px solid #000;
+        .meta-row {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            font-size: 9px;
-            color: #000;
+            margin: 10px 0 6px 0;
+            font-size: 10px;
         }
 
-        .legend {
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 3px;
-        }
-
-        .legend-dot {
-            width: 9px;
-            height: 9px;
-            border-radius: 2px;
-            background: #000;
-        }
-
-        /* Signature block */
-        .signature-table {
+        table {
             width: 100%;
-            margin-top: 10px;
             border-collapse: collapse;
         }
 
-        .signature-table td {
-            width: 50%;
-            padding: 10px 8px;
-            vertical-align: top;
-            border: 1px solid #0a0000;
-        }
-        .header-table td {
-            width: 50%;
-            padding: 10px 8px;
-            vertical-align: top;
-            border: #fff;
-        }
-
-        .signature-label {
-            font-weight: 700;
+        th, td {
+            border: 1px solid #000;
+            padding: 4px 5px;
             font-size: 10px;
-            color: #000;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
         }
 
-        .signature-line {
+        th {
+            text-align: center;
+            font-weight: 700;
+        }
+
+        td {
+            vertical-align: middle;
+        }
+
+        .text-center { text-align: center; }
+        .text-right  { text-align: right; }
+
+        .total-row td {
+            font-weight: 700;
+        }
+
+        .mt-10 { margin-top: 10px; }
+        .mt-15 { margin-top: 15px; }
+
+        .signature-row {
+            margin-top: 25px;
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+        }
+
+        .sig-block {
+            width: 45%;
+        }
+
+        .sig-line {
+            margin-top: 35px;
             border-top: 1px solid #000;
-            margin-top: 16px;
-            padding-top: 4px;
-            color: #000;
-            font-size: 9px;
+            padding-top: 3px;
         }
     </style>
 </head>
 <body>
-<div class="wrapper">
-    {{-- Header --}}
-    <div class="header">
-        <div class="header-left">
-            <h1>📋 Room Allocation Report</h1>
-            <div class="header-meta">
-                <div style="font-size: larger">Exam:{{ $exam->exam_title }} Batch: {{ $batch == 1 ? 'New Batch' : 'Old Batch' }}</div>
-                
-            </div>
+
+{{-- =============== PAGE 1: SUMMARY LETTER =============== --}}
+<div class="page">
+    <div class="letter-header">
+        {{-- You can replace this with full Nepali letterhead like your example --}}
+        <div class="college-name">
+            {{ config('app.college_name', 'ईन्जिनियरिङ्ग अध्ययन संस्था, पूर्वाञ्चल क्याम्पस, धरान') }}
         </div>
-   
+        <div style="margin-top:3px;">
+            {{ $exam->exam_title }}
+            (Batch: {{ $batch == 1 ? 'New' : 'Old' }})
+        </div>
+        <div class="title">
+            उत्तर पुस्तिका पठाउने बारे&nbsp;।
+        </div>
     </div>
-    <table class="header-table" >
+
+    <div class="meta-row">
+        <div>
+            मिति (Date): <strong>{{ $examDate }}</strong>
+        </div>
+        <div>
+            जम्मा विद्यार्थी (Total Students): <strong>{{ $totalPresent + $totalAbsent }}</strong>
+        </div>
+    </div>
+
+    <p style="font-size:10px; text-align:justify; margin-bottom:8px;">
+        तल उल्लेखित विषयहरूको उत्तर पुस्तिका सम्बन्धित विभाग / क्याम्पसमा पठाउँदा उपस्थित तथा अनुपस्थित
+        विद्यार्थीको संख्या देहाय अनुसार रहेको व्यहोरा अनुरोध छ&nbsp;।
+    </p>
+
+    {{-- SUMMARY TABLE --}}
+    <table>
+        <thead>
         <tr>
-            <td>
-                <div class="signature-label">Exam Date</div>
-                <div style="font-size: large; text-decoration: underline;">{{ $formattedExamDate }}</div>
-            </td>
-            <td style="text-align: right">
-                <div class="signature-label">Total Students</div>
-                <div style="font-size: large">{{ $totalStudents }}</div>
-            </td>
+            <th style="width:30px;">क्र.सं.</th>
+            <th style="width:110px;">कार्यक्रम / Faculty</th>
+            <th>विषय (Subject)</th>
+            <th style="width:60px;">Subject Code</th>
+            <th style="width:60px;">उपस्थित</th>
+            <th style="width:60px;">अनुपस्थित</th>
         </tr>
+        </thead>
+        <tbody>
+        @foreach($summaryRows as $row)
+            <tr>
+                <td class="text-center">{{ $row['sn'] }}</td>
+                <td>
+                    {{ $row['faculty_code'] }}<br>
+                    <span style="font-size:9px;">{{ $row['faculty_name'] }}</span>
+                </td>
+                <td>{{ $row['subject_name'] }}</td>
+                <td class="text-center">{{ $row['subject_code'] }}</td>
+                <td class="text-center">{{ $row['present_total'] }}</td>
+                <td class="text-center">{{ $row['absent_total'] }}</td>
+            </tr>
+        @endforeach
+
+        {{-- TOTAL ROW --}}
+        <tr class="total-row">
+            <td></td>
+            <td colspan="3" class="text-right">जम्मा (Total)</td>
+            <td class="text-center">{{ $totalPresent }}</td>
+            <td class="text-center">{{ $totalAbsent }}</td>
+        </tr>
+        </tbody>
     </table>
 
-    @if($rooms->isEmpty() || empty($papers))
-        <div class="empty-state">
-            No room allocations found for this exam and date.
+    <div class="signature-row">
+        <div class="sig-block">
+            <div>तयार गर्ने (Prepared By):</div>
+            <div class="sig-line">नाम, हस्ताक्षर र मिति</div>
         </div>
-    @else
-        @php
-            $usedRooms = $rooms->filter(function ($room) use ($totalsByRoom) {
-                return ($totalsByRoom[$room->id] ?? 0) > 0;
-            });
-            
-            $usedRoomsCount = $usedRooms->count();
-            $usedRoomsCount = $usedRoomsCount > 0 ? $usedRoomsCount : $rooms->count();
-            
-            // Calculate total capacity of all used rooms
-            $totalRoomCapacity = $usedRooms->sum('computed_total_seats');
-            // If no rooms are used, fall back to all rooms' capacity
-            if ($totalRoomCapacity == 0) {
-                $totalRoomCapacity = $rooms->sum('computed_total_seats');
-            }
-        @endphp
-        <table>
+        <div class="sig-block" style="text-align:right;">
+            <div>सिफारिस गर्ने / स्वीकृत गर्ने (Approved By):</div>
+            <div class="sig-line">नाम, हस्ताक्षर र मिति</div>
+        </div>
+    </div>
+</div>
+
+<div class="page-break"></div>
+
+{{-- ===================================================== --}}
+{{-- ========== FROM HERE: YOUR OLD PACKET PAGES ========== --}}
+{{-- ===================================================== --}}
+
+@foreach($packets as $packet)
+    <div class="page">
+        {{-- ⬇️ Put your existing single-packet layout here.
+             Normally you already had something like:
+             - Exam title, date, faculty, subject
+             - Present list / Absent list, etc.
+        --}}
+
+        <h3 style="text-align:center; margin-bottom:6px;">
+            Answer Script Packet – {{ $packet['subject_code'] }}
+        </h3>
+        <p style="font-size:10px; margin-bottom:4px;">
+            Exam: {{ $packet['exam']->exam_title }}<br>
+            Date: {{ $packet['exam_date'] }}<br>
+            Faculty: {{ $packet['faculty']?->code }} – {{ $packet['faculty']?->name }}<br>
+            Batch: {{ $packet['batch'] == 1 ? 'New' : 'Old' }}
+        </p>
+
+        <table class="mt-10">
             <thead>
             <tr>
-                <th style="text-align:center; font-size: 15px;">Room</th>
-                @foreach($papers as $paperKey => $paper)
-                    @php
-                        $fac = $faculties[$paper['faculty_id']] ?? null;
-                    @endphp
-                    <th>
-                        <div class="subject-code">{{ $paper['subject_code'] }}</div>
-                        <div class="subject-name">{{ $paper['subject_name'] }}</div>
-                        <div class="faculty-code" style="font-size: larger">{{ $fac?->code ?? 'N/A' }}</div>
-                        <div class="total-badge" style="font-size: larger">= {{ $paper['total_students'] }}</div>
-                    </th>
-                @endforeach
-                <th>Stu / Room</th>
+                <th style="width:60px;">Status</th>
+                <th>Symbol Numbers</th>
+                <th style="width:80px;">Total</th>
             </tr>
             </thead>
             <tbody>
-            @foreach($rooms as $room)
-                @php
-                    $roomTotal = $totalsByRoom[$room->id] ?? 0;
-                    $roomCap   = $room->computed_total_seats;
-                    $overCap   = $roomTotal > $roomCap;
-                    $utilization = $roomCap > 0 ? ($roomTotal / $roomCap) * 100 : 0;
-                @endphp
-                <tr>
-                    <td>
-                        <div class="room-info">
-                            <div class="room-no">{{ $room->room_no }}</div>
-                            {{-- <div class="room-details">
-                                Capacity: {{ $roomCap }} seats<br>
-                                Benches: {{ $room->computed_total_benches }}
-                            </div> --}}
-                        </div>
-                    </td>
-                    @foreach($papers as $paperKey => $paper)
-                        @php
-                            $val = $allocByRoom[$room->id][$paperKey] ?? 0;
-                        @endphp
-                        <td class="text-center">
-                            @if($val > 0)
-                                <span style="font-size: 13px">{{ $val }}</span>
-                            @else
-                                <span>—</span>
-                            @endif
-                        </td>
-                    @endforeach
-                    <td class="text-center">
-                        <span class="pill {{ $overCap ? 'pill-danger' : ($utilization > 80 ? 'pill-warning' : 'pill-success') }}">
-                            {{ $roomTotal }} / {{ $roomCap }}
-                        </span>
-                    </td>
-                </tr>
-            @endforeach
-
-            {{-- Subject Totals Row --}}
-            <tr class="subject-total-row">
-                <td><span style="font-size: 13px; text-align: center;">Subject Total</span></td>
-                @foreach($papers as $paperKey => $paper)
-                    @php
-                        $paperTotal = $totalsByPaper[$paperKey] ?? 0;
-                        $paperMax   = $paper['total_students'];
-                        $overAlloc  = $paperTotal > $paperMax;
-                        $underAlloc = $paperTotal < $paperMax;
-                    @endphp
-                    <td class="text-center">
-                        <span class="pill {{ $overAlloc ? 'pill-danger' : ($underAlloc ? 'pill-warning' : 'pill-success') }}">
-                            {{ $paperTotal }} / {{ $paperMax }}
-                        </span>
-                    </td>
-                @endforeach
-                <td class="text-center">
-                    <span class="pill">{{ $totalStudents }} / {{ $totalStudents }}</span>
+            <tr>
+                <td class="text-center">Present</td>
+                <td>
+                    @if(!empty($packet['present']))
+                        {{ implode(', ', $packet['present']) }}
+                    @else
+                        —
+                    @endif
                 </td>
+                <td class="text-center">{{ $packet['present_total'] }}</td>
+            </tr>
+            <tr>
+                <td class="text-center">Absent</td>
+                <td>
+                    @if(!empty($packet['absent']))
+                        {{ implode(', ', $packet['absent']) }}
+                    @else
+                        —
+                    @endif
+                </td>
+                <td class="text-center">{{ $packet['absent_total'] }}</td>
             </tr>
             </tbody>
         </table>
-    @endif
 
-    <table class="signature-table">
-        <tr>
-            <td>
-                <div class="signature-label">Prepared By</div>
-                <div class="signature-line">Signature & Date</div>
-            </td>
-            <td>
-                <div class="signature-label">Approved By</div>
-                <div class="signature-line">Signature & Date</div>
-            </td>
-        </tr>
-    </table>
-    <div class="footer">
-        <div style="text-align: center; font-size: large; font-style: italic; margin-top: 10px;">Generated by ERC Exam System</div>
-        <div>Generated: <span>{{ now()->format('d M Y, H:i') }}</span></div>
+        {{-- You can also include signature boxes here like you already had --}}
     </div>
-</div>
+
+    @if(!$loop->last)
+        <div class="page-break"></div>
+    @endif
+@endforeach
+
 </body>
 </html>

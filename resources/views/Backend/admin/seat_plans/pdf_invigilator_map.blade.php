@@ -73,26 +73,30 @@
         </thead>
         <tbody>
         @foreach($seatLayout as $roomId => $layout)
-            @php
-                $room = $layout['room'];
-                $invs = $layout['invigilators'] ?? collect();
-            @endphp
-            <tr>
-                <td class="center">{{ $room->room_no }}</td>
-                <td>
-                    @if ($invs->isEmpty())
-                        <span class="small" style="color:#777;">(No invigilator assigned)</span>
-                    @else
-                        @foreach($invs as $idx => $inv)
-                            {{ $idx + 1 }}.
-                            {{ $inv->full_name }}
-                            ({{ ucfirst($inv->employee_type) }})
-                            @if(!$loop->last)<br>@endif
-                        @endforeach
-                    @endif
-                </td>
-            </tr>
-        @endforeach
+
+    @php
+        $room = $layout['room'];
+        $invs = collect($layout['invigilators'] ?? []);
+    @endphp
+
+    <tr>
+        <td class="center">{{ $room->room_no }}</td>
+        <td>
+            @if ($invs->isEmpty())
+                <span class="small" style="color:#777;">(No invigilator assigned)</span>
+            @else
+                @foreach($invs as $idx => $inv)
+                    {{ $idx + 1 }}.
+                    {{ $inv->full_name }}
+                    ({{ ucfirst($inv->employee_type) }})
+                    @if(!$loop->last)<br>@endif
+                @endforeach
+            @endif
+        </td>
+    </tr>
+
+@endforeach
+
         </tbody>
     </table>
 

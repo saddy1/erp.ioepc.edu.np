@@ -1,9 +1,6 @@
 <?php
 
 namespace App\Http\Controllers;
-
-
-use App\Models\Student;
 use App\Models\Admin;
 
 
@@ -13,8 +10,6 @@ class DashboardController extends Controller
     {
         return view('Frontend.index');
     }
-
-
 
     public function admin()
     {

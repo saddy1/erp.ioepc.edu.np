@@ -7,6 +7,9 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\RoomController;
 use App\Http\Controllers\Admin\FacultyController;
 use App\Http\Controllers\Admin\FacultySubjectController;
+use App\Http\Controllers\Admin\StudentController;
+use App\Http\Controllers\Admin\SectionController;
+
 
 
 
@@ -39,6 +42,22 @@ Route::group(['middleware' => 'admin.auth'], function () {
 
         Route::get('rooms/exam-seat-plan/print', [RoomController::class, 'examSeatPlanPrint'])
             ->name('rooms.exam_seat_plan.print');
+            Route::resource('sections', SectionController::class)->except(['show']);
+
+    
+    // NEW: Student import (master students)
+    Route::get('students-import', [StudentController::class, 'showImportForm'])->name('students.import.form');
+    Route::post('students-import', [StudentController::class, 'import'])->name('students.import');
+
+    // NEW: Bulk semester upgrade
+    Route::get('students-upgrade', [StudentController::class, 'showUpgradeForm'])->name('students.upgrade.form');
+    Route::post('students-upgrade', [StudentController::class, 'upgradeSemester'])->name('students.upgrade');
+
+    Route::get('rooms/exam-seat-plan', [RoomController::class, 'examSeatPlan'])
+        ->name('rooms.exam_seat_plan');
+
+    Route::get('rooms/exam-seat-plan/print', [RoomController::class, 'examSeatPlanPrint'])
+        ->name('rooms.exam_seat_plan.print');
       
     });
 

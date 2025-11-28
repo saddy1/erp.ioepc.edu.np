@@ -19,4 +19,9 @@ class Faculty extends Model {
   public function semesterSubjects()
 {
     return $this->hasMany(FacultySemesterSubject::class); 
-}}
+}
+public function sections()
+{
+    return $this->hasMany(Section::class);
+}
+}

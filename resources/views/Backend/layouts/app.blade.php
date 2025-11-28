@@ -111,6 +111,18 @@
                             <i class="fas fa-book w-5 text-gray-300"></i><span>Faculty Subjects</span>
                         </a>
                     </li>
+                        <li>
+                            <a href="{{ route('sections.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
+                                <i class="fas fa-users w-5 text-gray-300"></i><span>Sections</span>
+                            </a>
+
+                        </li>
+                    <li>
+                        <a href="{{ route('students.import.form') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
+                            <i class="fas fa-user-graduate w-5 text-gray-300"></i><span>Students</span>
+                        </a>
+                    </li>
+                    <li>
                         
                         
                

@@ -123,6 +123,15 @@
                         </a>
                     </li>
                     <li>
+                        <a href="{{ route('admin.teachers.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
+                            <i class="fas fa-chalkboard-teacher w-5 text-gray-300"></i><span>Teachers</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="{{ route('admin.routines.index') }}" class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
+                            <i class="fas fa-calendar-alt w-5 text-gray-300"></i><span>Routines</span>
+                        </a>
+                    </li>
                         
                         
                

@@ -19,7 +19,11 @@ class DatabaseSeeder extends Seeder
         //     'email' => 'test@example.com',
         // ]);
             $this->call(class: AdminSeeder::class);
+             $this->call([
+        PeriodSeeder::class,
+    ]);
             $this->call(class: DemoSeeder::class);
+          
 
     }
 }

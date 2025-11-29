@@ -44,10 +44,11 @@ class Routine extends Model
         return $this->belongsTo(Subject::class);
     }
 
-    public function teacher()
-    {
-        return $this->belongsTo(Teacher::class);
-    }
+ public function teachers()
+{
+    return $this->belongsToMany(Teacher::class, 'routine_teacher');
+}
+
 
     public function room()
     {

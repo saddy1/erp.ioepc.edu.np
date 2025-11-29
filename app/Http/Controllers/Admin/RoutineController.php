@@ -34,7 +34,8 @@ class RoutineController extends Controller
             'section_id' => $request->input('section_id'),
             'day_of_week' => $request->input('day_of_week'),
             'teacher_id' => $request->input('teacher_id'),
-            'shift'      => $request->input('shift'),   // <── NEW
+            'shift'      => $request->input('shift'),
+            'subject_batch'  => $request->input('subject_batch'),
         ];
 
         // 3) Sections & subjects (dependent on faculty + semester)
@@ -47,16 +48,28 @@ class RoutineController extends Controller
                 ->orderBy('name')
                 ->get();
         }
-
         if ($filters['faculty_id'] && $filters['semester']) {
-            // subjects for that faculty + semester via your semesterBindings relation
-            $subjects = Subject::whereHas('semesterBindings', function ($q) use ($filters) {
+            // map UI value → db tinyint
+            $subjectBatchCode = null;
+            if ($filters['subject_batch'] === 'new') {
+                $subjectBatchCode = 1;
+            } elseif ($filters['subject_batch'] === 'old') {
+                $subjectBatchCode = 2;
+            }
+
+            $subjects = Subject::whereHas('semesterBindings', function ($q) use ($filters, $subjectBatchCode) {
                 $q->where('faculty_id', $filters['faculty_id'])
                     ->where('semester',   $filters['semester']);
+
+                if (!is_null($subjectBatchCode)) {
+                    $q->where('batch', $subjectBatchCode); // 1 or 2
+                }
             })
                 ->orderBy('code')
                 ->get();
         }
+
+
 
         // 4) Teachers and rooms
         $teachers = Teacher::orderBy('name')->get();   // any teacher can teach any subject now
@@ -70,7 +83,7 @@ class RoutineController extends Controller
             ->get();
 
         // 6) Main routine list (paginated so ->total() & ->links() work)
-        $routines = Routine::with(['faculty', 'section', 'period', 'subject', 'teacher', 'room'])
+        $routines = Routine::with(['faculty', 'section', 'period', 'subject', 'teachers', 'room'])
             ->filter($filters)               // your existing local scope
             ->orderBy('day_of_week')
             ->orderBy('period_id')
@@ -125,6 +138,8 @@ class RoutineController extends Controller
     {
         // 1) Validate base data (NO period_id here)
         $data = $this->validateStore($request);
+        $teacherIds = $data['teacher_ids'];
+        unset($data['teacher_ids']); // we'll use pivot
 
         // 2) Resolve start/end periods and build period range
         $startPeriod = Period::findOrFail($data['start_period_id']);
@@ -156,12 +171,15 @@ class RoutineController extends Controller
 
         // 3) Business validation for each period (teacher conflict etc.)
         foreach ($periodsRange as $p) {
-            $row = $data;
-            $row['period_id'] = $p->id;
+            foreach ($teacherIds as $tid) {
+                $row            = $data;
+                $row['period_id']   = $p->id;
+                $row['teacher_id']  = $tid; // for validation only
 
-            $error = $this->businessValidation($row, null);
-            if ($error) {
-                return back()->withErrors($error)->withInput();
+                $error = $this->businessValidation($row, null);
+                if ($error) {
+                    return back()->withErrors($error)->withInput();
+                }
             }
         }
 
@@ -169,9 +187,13 @@ class RoutineController extends Controller
         foreach ($periodsRange as $p) {
             $row = $data;
             unset($row['start_period_id'], $row['end_period_id']);
-            $row['period_id'] = $p->id;
+            $row['period_id']  = $p->id;
 
-            Routine::create($row);
+            // Optionally keep a "primary" teacher for quick reference
+            $row['teacher_id'] = $teacherIds[0];
+
+            $routine = Routine::create($row);
+            $routine->teachers()->sync($teacherIds);
         }
 
         return redirect()->route('admin.routines.index', [
@@ -233,15 +255,26 @@ class RoutineController extends Controller
 
     public function update(Request $request, Routine $routine)
     {
-        // for edit we still use single period_id
-        $data = $this->validateUpdate($request, $routine->id);
+        $data       = $this->validateUpdate($request, $routine->id);
+        $teacherIds = $data['teacher_ids'];
+        unset($data['teacher_ids']);
 
-        $error = $this->businessValidation($data, $routine->id);
-        if ($error) {
-            return back()->withErrors($error)->withInput();
+        // clash check for all teachers
+        foreach ($teacherIds as $tid) {
+            $row              = $data;
+            $row['teacher_id'] = $tid;
+            $error = $this->businessValidation($row, $routine->id);
+            if ($error) {
+                return back()->withErrors($error)->withInput();
+            }
         }
 
+        // keep primary teacher = first
+        $data['teacher_id'] = $teacherIds[0];
+
         $routine->update($data);
+        $routine->teachers()->sync($teacherIds);
+
 
         return redirect()->route('admin.routines.index', [
             'faculty_id' => $data['faculty_id'],
@@ -265,6 +298,8 @@ class RoutineController extends Controller
     {
         $facultyId = $request->input('faculty_id');
         $semester  = $request->input('semester');
+        $subjectBatch  = $request->input('subject_batch'); // 'old' or 'new'
+
         $batch     = $request->input('batch'); // optional, in case you use it later
 
         if (!$facultyId || !$semester) {
@@ -278,12 +313,31 @@ class RoutineController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        $subjects = Subject::whereHas('semesterBindings', function ($q) use ($facultyId, $semester) {
+        $subjectBatchCode = null;
+        if ($subjectBatch === 'new') {
+            $subjectBatchCode = 1;
+        } elseif ($subjectBatch === 'old') {
+            $subjectBatchCode = 2;
+        }
+
+        $subjects = Subject::whereHas('semesterBindings', function ($q) use ($facultyId, $semester, $subjectBatchCode) {
             $q->where('faculty_id', $facultyId)
-                ->where('semester', $semester);
+                ->where('semester',   $semester);
+
+            if (!is_null($subjectBatchCode)) {
+                $q->where('batch', $subjectBatchCode);
+            }
         })
             ->orderBy('code')
-            ->get(['id', 'code', 'name', 'has_practical']);
+            ->get()
+            ->map(function ($s) {
+                return [
+                    'id'            => $s->id,
+                    'code'          => $s->code,
+                    'name'          => $s->name,
+                    'has_practical' => (bool) $s->has_practical,
+                ];
+            });
 
         return response()->json([
             'sections' => $sections,
@@ -312,7 +366,8 @@ class RoutineController extends Controller
             'type'       => ['required', Rule::in(['TH', 'PR'])],
 
             'subject_id' => ['required', 'exists:subjects,id'],
-            'teacher_id' => ['required', 'exists:teachers,id'],
+            'teacher_ids'   => ['required', 'array', 'min:1'],
+            'teacher_ids.*' => ['integer', 'exists:teachers,id'],
 
             'room_id'       => ['nullable', 'exists:rooms,id'],
             'academic_year' => ['nullable', 'string', 'max:15'],
@@ -334,7 +389,8 @@ class RoutineController extends Controller
             'type'       => ['required', Rule::in(['TH', 'PR'])],
 
             'subject_id' => ['required', 'exists:subjects,id'],
-            'teacher_id' => ['required', 'exists:teachers,id'],
+            'teacher_ids'   => ['required', 'array', 'min:1'],
+            'teacher_ids.*' => ['integer', 'exists:teachers,id'],
 
             'room_id'       => ['nullable', 'exists:rooms,id'],
             'academic_year' => ['nullable', 'string', 'max:15'],
@@ -348,91 +404,122 @@ class RoutineController extends Controller
      * - Section cannot have two classes in same day+period+group
      * - Teacher cannot have two classes at same day + period (across all faculties)
      */
-    private function businessValidation(array $data, ?int $ignoreRoutineId = null): ?array
-    {
-        // --- A) Period / shift must be valid ---
-        $period = Period::find($data['period_id'] ?? null);
-        if (!$period) {
-            return ['period_id' => 'Invalid period selected.'];
-        }
-        $newShift = $period->shift;   // 'morning' or 'day'
-
-        // --- B) A semester-section must use only ONE shift (morning OR day) ---
-        $existingRoutineQuery = Routine::where('faculty_id', $data['faculty_id'])
-            ->where('batch',      $data['batch'])
-            ->where('semester',   $data['semester'])
-            ->where('section_id', $data['section_id']);
-
-        if ($ignoreRoutineId) {
-            $existingRoutineQuery->where('id', '!=', $ignoreRoutineId);
-        }
-
-        $existingRoutine = $existingRoutineQuery->with('period')->first();
-
-        if ($existingRoutine && $existingRoutine->period) {
-            $existingShift = $existingRoutine->period->shift; // 'morning' or 'day'
-
-            if ($existingShift && $existingShift !== $newShift) {
-                return [
-                    'period_id' => 'This semester already has classes in the '
-                        . ucfirst($existingShift)
-                        . ' shift. You cannot add periods from the '
-                        . ucfirst($newShift)
-                        . ' shift.'
-                ];
-            }
-        }
-        // 0) Section-time slot conflict (matches your unique index)
-        $sectionQuery = Routine::where('faculty_id', $data['faculty_id'])
-            ->where('batch',      $data['batch'])
-            ->where('semester',   $data['semester'])
-            ->where('section_id', $data['section_id'])
-            ->where('day_of_week', $data['day_of_week'])
-            ->where('period_id',  $data['period_id'])
-            ->where('group',      $data['group']);
-
-        if ($ignoreRoutineId) {
-            $sectionQuery->where('id', '!=', $ignoreRoutineId);
-        }
-
-        if ($sectionQuery->exists()) {
-            return [
-                'period_id' => 'This section already has another class at this day and period for the selected group.'
-            ];
-        }
-
-        // 1) Theory/Practical vs group
-        if ($data['type'] === 'TH' && $data['group'] !== 'ALL') {
-            return ['group' => 'Theory classes must be scheduled for group ALL (combined section).'];
-        }
-        if ($data['type'] === 'PR' && $data['group'] === 'ALL') {
-            return ['group' => 'Practical classes must be scheduled for group A or B, not ALL.'];
-        }
-
-        // 2) Practical only allowed if subject has practical
-        $subject = Subject::find($data['subject_id']);
-        if (!$subject) {
-            return ['subject_id' => 'Subject not found.'];
-        }
-        if ($data['type'] === 'PR' && !$subject->has_practical) {
-            return ['subject_id' => 'Selected subject does not have practical.'];
-        }
-
-        // 3) Teacher conflict: same teacher, same day, same period (across all faculties)
-        $conflictQuery = Routine::where('teacher_id', $data['teacher_id'])
-            ->where('day_of_week', $data['day_of_week'])
-            ->where('period_id',   $data['period_id']);
-
-        if ($ignoreRoutineId) {
-            $conflictQuery->where('id', '!=', $ignoreRoutineId);
-        }
-
-        if ($conflictQuery->exists()) {
-            return [
-                'teacher_id' => 'This teacher already has a class at this day and period.'
-            ];
-        }
-
-        return null;
+ private function businessValidation(array $data, ?int $ignoreRoutineId = null): ?array
+{
+    // --- A) Period / shift must be valid ---
+    $period = Period::find($data['period_id'] ?? null);
+    if (!$period) {
+        return ['period_id' => 'Invalid period selected.'];
     }
+    $newShift = $period->shift;   // 'morning' or 'day'
+
+    // --- B) A semester-section must use only ONE shift (morning OR day) ---
+    $existingRoutineQuery = Routine::where('faculty_id', $data['faculty_id'])
+        ->where('batch',      $data['batch'])
+        ->where('semester',   $data['semester'])
+        ->where('section_id', $data['section_id']);
+
+    if ($ignoreRoutineId) {
+        $existingRoutineQuery->where('id', '!=', $ignoreRoutineId);
+    }
+
+    $existingRoutine = $existingRoutineQuery->with('period')->first();
+
+    if ($existingRoutine && $existingRoutine->period) {
+        $existingShift = $existingRoutine->period->shift; // 'morning' or 'day'
+
+        if ($existingShift && $existingShift !== $newShift) {
+            return [
+                'period_id' => 'This semester already has classes in the '
+                    . ucfirst($existingShift)
+                    . ' shift. You cannot add periods from the '
+                    . ucfirst($newShift)
+                    . ' shift.'
+            ];
+        }
+    }
+
+    // -------------------------------------------------------
+    // 0) Section-time slot conflicts (NEW stronger logic)
+    // -------------------------------------------------------
+    $slotQuery = Routine::where('faculty_id', $data['faculty_id'])
+        ->where('batch',      $data['batch'])
+        ->where('semester',   $data['semester'])
+        ->where('section_id', $data['section_id'])
+        ->where('day_of_week', $data['day_of_week'])
+        ->where('period_id',  $data['period_id']);
+
+    if ($ignoreRoutineId) {
+        $slotQuery->where('id', '!=', $ignoreRoutineId);
+    }
+
+    $slotRoutines = $slotQuery->get();
+
+    // same group already in that slot (old rule – keep)
+    if ($slotRoutines->where('group', $data['group'])->isNotEmpty()) {
+        return [
+            'period_id' => 'This section already has another class at this day and period for the selected group.'
+        ];
+    }
+
+    $hasAllGroup = $slotRoutines->where('group', 'ALL')->isNotEmpty();
+
+    // if ALL already exists, no A/B allowed
+    if ($hasAllGroup && $data['group'] !== 'ALL') {
+        return [
+            'group' => 'This section already has a combined (ALL) class at this time. '
+                     . 'You cannot schedule Group ' . $data['group'] . ' in parallel.'
+        ];
+    }
+
+    // if A/B already exists, no new ALL allowed
+    if (!$hasAllGroup && $data['group'] === 'ALL' && $slotRoutines->isNotEmpty()) {
+        return [
+            'group' => 'Some groups of this section already have a class at this time. '
+                     . 'You cannot schedule a combined (ALL) class in parallel.'
+        ];
+    }
+
+    // -------------------------------------------------------
+    // 1) Theory/Practical vs group
+    // -------------------------------------------------------
+    if ($data['type'] === 'TH' && $data['group'] !== 'ALL') {
+        return ['group' => 'Theory classes must be scheduled for group ALL (combined section).'];
+    }
+    if ($data['type'] === 'PR' && $data['group'] === 'ALL') {
+        return ['group' => 'Practical classes must be scheduled for group A or B, not ALL.'];
+    }
+
+    // -------------------------------------------------------
+    // 2) Practical only allowed if subject has practical
+    // -------------------------------------------------------
+    $subject = Subject::find($data['subject_id']);
+    if (!$subject) {
+        return ['subject_id' => 'Subject not found.'];
+    }
+    if ($data['type'] === 'PR' && !$subject->has_practical) {
+        return ['subject_id' => 'Selected subject does not have practical.'];
+    }
+
+    // -------------------------------------------------------
+    // 3) Teacher conflict: same teacher, same day+period
+    //    (works per teacher_id for now)
+    // -------------------------------------------------------
+    $conflictQuery = Routine::where('teacher_id', $data['teacher_id'])
+        ->where('day_of_week', $data['day_of_week'])
+        ->where('period_id',   $data['period_id']);
+
+    if ($ignoreRoutineId) {
+        $conflictQuery->where('id', '!=', $ignoreRoutineId);
+    }
+
+    if ($conflictQuery->exists()) {
+        return [
+            'teacher_id' => 'This teacher already has a class at this day and period.'
+        ];
+    }
+
+    return null;
+}
+
 }

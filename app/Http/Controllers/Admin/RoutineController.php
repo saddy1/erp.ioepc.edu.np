@@ -24,12 +24,14 @@ class RoutineController extends Controller
             ->distinct()
             ->orderBy('batch', 'desc')
             ->pluck('batch');
-        $semesters = [1, 2, 3, 4, 5, 6, 7, 8];
+        $semesters = [1, 2, 3, 4, 5, 6, 7, 8,9,10];
+     
 
         // 2) Filters from query
         $filters = [
             'faculty_id' => $request->input('faculty_id'),
             'batch'      => $request->input('batch'),
+          
             'semester'   => $request->input('semester'),
             'section_id' => $request->input('section_id'),
             'day_of_week' => $request->input('day_of_week'),
@@ -119,6 +121,7 @@ class RoutineController extends Controller
         return view('Backend.admin.routines.index', compact(
             'faculties',
             'batches',
+            
             'semesters',
             'sections',
             'subjects',
@@ -199,6 +202,7 @@ class RoutineController extends Controller
         return redirect()->route('admin.routines.index', [
             'faculty_id' => $data['faculty_id'],
             'batch'      => $data['batch'],
+        
             'semester'   => $data['semester'],
             'section_id' => $data['section_id'],
         ])->with('ok', 'Routine entry created for selected period range.');
@@ -354,7 +358,7 @@ class RoutineController extends Controller
         return $request->validate([
             'faculty_id' => ['required', 'exists:faculties,id'],
             'batch'      => ['required', 'string', 'max:10'],
-            'semester'   => ['required', 'integer', 'between:1,8'],
+            'semester'   => ['required', 'integer', 'between:1,10'],
             'section_id' => ['required', 'exists:sections,id'],
 
             'day_of_week' => ['required', Rule::in(['sun', 'mon', 'tue', 'wed', 'thu', 'fri'])],
@@ -379,7 +383,7 @@ class RoutineController extends Controller
         return $request->validate([
             'faculty_id' => ['required', 'exists:faculties,id'],
             'batch'      => ['required', 'string', 'max:10'],
-            'semester'   => ['required', 'integer', 'between:1,8'],
+            'semester'   => ['required', 'integer', 'between:1,10'],
             'section_id' => ['required', 'exists:sections,id'],
 
             'period_id'  => ['required', 'exists:periods,id'],

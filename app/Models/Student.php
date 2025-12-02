@@ -3,11 +3,12 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Hash;
 
 class Student extends Model
 {
     protected $fillable = [
-        'roll_no',
+        'symbol_no',
         'name',
         'faculty_id',
         'section_id',
@@ -24,9 +25,26 @@ class Student extends Model
         'municipality',
         'ward',
         'district',
+
+        // login-related fields
+        'password',
+        'can_login',
+        'must_change_password',
     ];
 
-    // Relationships
+    protected $hidden = ['password'];
+
+    protected $casts = [
+        'can_login'          => 'boolean',
+        'must_change_password' => 'boolean',
+    ];
+
+    /*
+     |--------------------------------------------------------------------------
+     | Relationships
+     |--------------------------------------------------------------------------
+     */
+
     public function faculty()
     {
         return $this->belongsTo(Faculty::class);
@@ -37,7 +55,16 @@ class Student extends Model
         return $this->belongsTo(Section::class);
     }
 
-    // Automatically keep semester consistent with year & part
+    public function role()
+    {
+        return $this->hasOne(StudentRole::class);
+    }
+
+    /*
+     |--------------------------------------------------------------------------
+     | Model Events (keep semester consistent with year + part)
+     |--------------------------------------------------------------------------
+     */
     protected static function booted()
     {
         static::saving(function (Student $student) {
@@ -47,7 +74,11 @@ class Student extends Model
         });
     }
 
-    // Filters used on index
+    /*
+     |--------------------------------------------------------------------------
+     | Query Scopes (used in your student listing / filters)
+     |--------------------------------------------------------------------------
+     */
     public function scopeFilter($q, array $filters)
     {
         if (!empty($filters['faculty_id'])) {
@@ -71,5 +102,29 @@ class Student extends Model
         }
 
         return $q;
+    }
+
+    /*
+     |--------------------------------------------------------------------------
+     | Mutators / helpers for login + roles
+     |--------------------------------------------------------------------------
+     */
+
+    // Hash password when setting (no manual Hash::make() elsewhere)
+    public function setPasswordAttribute($value)
+    {
+        if ($value) {
+            $this->attributes['password'] = Hash::make($value);
+        }
+    }
+
+    public function isCr(): bool
+    {
+        return $this->role && $this->role->role === 'CR';
+    }
+
+    public function isVcr(): bool
+    {
+        return $this->role && $this->role->role === 'VCR';
     }
 }

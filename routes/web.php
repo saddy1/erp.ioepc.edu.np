@@ -11,6 +11,13 @@ use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\SectionController;
 use App\Http\Controllers\Admin\RoutineController;
 use App\Http\Controllers\Admin\TeacherController;
+use App\Http\Controllers\Student\ClassFeedbackController;
+use App\Http\Controllers\Teacher\TeacherDashboardController;
+use App\Http\Controllers\Teacher\AttendanceController;
+use App\Http\Controllers\Student\StudentDashboardController;
+use App\Http\Controllers\Admin\CrRoleController;
+
+
 
 
 
@@ -27,9 +34,50 @@ use App\Http\Controllers\Admin\TeacherController;
 |
 */
 
+// STUDENT AUTH
+Route::get('/login/student', [AuthController::class, 'showStudentLogin'])->name('student.login.form');
+Route::post('/login/student', [AuthController::class, 'studentLogin'])->name('student.login');
+
+
+// TEACHER AUTH
+Route::get('/login/teacher', [AuthController::class, 'showTeacherLogin'])->name('teacher.login.form');
+Route::post('/login/teacher', [AuthController::class, 'teacherLogin'])->name('teacher.login');
+
 
 Route::get('/login/admin', [AuthController::class, 'showAdminLogin'])->name('admin.login.form');
 Route::post('/login/admin', [AuthController::class, 'adminLogin'])->name('admin.login');
+
+
+// STUDENT AUTH
+Route::get('/login/student', [AuthController::class, 'showStudentLogin'])->name('student.login.form');
+Route::post('/login/student', [AuthController::class, 'studentLogin'])->name('student.login');
+
+// TEACHER AUTH
+Route::get('/login/teacher', [AuthController::class, 'showTeacherLogin'])->name('teacher.login.form');
+Route::post('/login/teacher', [AuthController::class, 'teacherLogin'])->name('teacher.login');
+
+
+
+// STUDENT AREA (CR/VCR only)
+Route::group(['middleware' => 'student.auth'], function () {
+    Route::get('/dashboard/student', [StudentDashboardController::class, 'index'])->name('student.dashboard');
+    Route::get('/student/routine', [StudentDashboardController::class, 'routine'])->name('student.routine');
+
+    Route::post('/student/class-feedback', [ClassFeedbackController::class, 'store'])
+        ->name('student.class_feedback.store');
+});
+
+// TEACHER AREA
+Route::group(['middleware' => 'teacher.auth'], function () {
+    Route::get('/dashboard/teacher', [TeacherDashboardController::class, 'index'])->name('teacher.dashboard');
+
+    Route::get('/teacher/attendance/{routine}', [AttendanceController::class, 'show'])
+        ->name('teacher.attendance.show');
+
+    Route::post('/teacher/attendance/{routine}', [AttendanceController::class, 'store'])
+        ->name('teacher.attendance.store');
+});
+
 
 Route::group(['middleware' => 'admin.auth'], function () {
     Route::get('/dashboard/admin', [DashboardController::class, 'admin'])->name('admin.dashboard');
@@ -53,14 +101,24 @@ Route::group(['middleware' => 'admin.auth'], function () {
         Route::put('routines/{routine}', [RoutineController::class, 'update'])->name('admin.routines.update');
         Route::delete('routines/{routine}', [RoutineController::class, 'destroy'])->name('admin.routines.destroy');
 
-Route::get('teachers/search', [TeacherController::class, 'search'])
-    ->name('admin.teachers.search');
+        Route::get('teachers/search', [TeacherController::class, 'search'])
+            ->name('admin.teachers.search');
 
         Route::get('teachers',          [TeacherController::class, 'index'])->name('admin.teachers.index');
         Route::post('teachers',         [TeacherController::class, 'store'])->name('admin.teachers.store');
         Route::get('teachers/{teacher}/edit', [TeacherController::class, 'edit'])->name('admin.teachers.edit');
         Route::put('teachers/{teacher}',       [TeacherController::class, 'update'])->name('admin.teachers.update');
         Route::delete('teachers/{teacher}',    [TeacherController::class, 'destroy'])->name('admin.teachers.destroy');
+
+
+
+          // CR / VCR assignment routes
+        Route::get('cr-roles', [CrRoleController::class, 'index'])
+            ->name('admin.cr_roles.index');
+
+        Route::post('cr-roles', [CrRoleController::class, 'save'])
+            ->name('admin.cr_roles.save');
+
     });
 
 

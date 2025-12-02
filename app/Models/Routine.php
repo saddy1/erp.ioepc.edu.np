@@ -12,6 +12,7 @@ class Routine extends Model
     protected $fillable = [
         'faculty_id',
         'batch',
+        'year',
         'semester',
         'section_id',
         'period_id',
@@ -79,4 +80,14 @@ class Routine extends Model
 
         return $q;
     }
+    public function attendances()
+{
+    return $this->hasMany(Attendance::class);
+}
+
+public function classFeedbacks()
+{
+    return $this->hasMany(ClassFeedback::class);
+}
+
 }

@@ -13,7 +13,8 @@ return new class extends Migration
 
             // Academic context
             $table->foreignId('faculty_id')->constrained()->cascadeOnDelete();
-            $table->string('batch', 10);                     // 2080, 2081...
+            $table->string('batch', 10); 
+            $table->unsignedTinyInteger('year');                    // 2080, 2081...
             $table->unsignedTinyInteger('semester');         // 1..8
             $table->foreignId('section_id')->constrained()->cascadeOnDelete();
 

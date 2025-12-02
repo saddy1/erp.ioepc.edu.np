@@ -682,378 +682,379 @@
 
 
 
-  {{-- Make teacher list available to JS --}}
-<script>
-    window.ALL_TEACHERS = @json(
-        $teachers->map(function ($t) {
-            return [
-                'id'    => $t->id,
-                'label' => $t->name . ($t->faculty?->code ? ' (' . $t->faculty->code . ')' : ''),
-            ];
-        })
-    );
-
-    // For create form we only keep old() selections
-    window.PRESELECTED_TEACHERS = @json(old('teacher_ids', []));
-</script>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        const shiftSelect        = document.getElementById('shift_select');
-        const subjectBatchSelect = document.getElementById('subject_batch_select');
-        const groupSelect        = document.getElementById('group_select');
-
-        const startPeriodSelect  = document.getElementById('start_period_select');
-        const endPeriodSelect    = document.getElementById('end_period_select');
-
-        const facultySelect      = document.getElementById('faculty_select');
-        const semesterSelect     = document.getElementById('semester_select');
-        const batchSelect        = document.getElementById('batch_select');
-        const sectionSelect      = document.getElementById('section_select');
-        const subjectSelect      = document.getElementById('subject_select');
-
-        const typeSelect         = document.getElementById('type_select');
-        const typeHint           = document.getElementById('type_hint');
-
-        // ---- Teacher search (chips + results) ----
-        const teacherSearch   = document.getElementById('teacher_search');   // 🔴 missing before
-        const teacherResults  = document.getElementById('teacher_results');
-        const selectedWrapper = document.getElementById('selected_teachers');
-
-        const allTeachers = Array.isArray(window.ALL_TEACHERS) ? window.ALL_TEACHERS : [];
-        const preselected = Array.isArray(window.PRESELECTED_TEACHERS) ? window.PRESELECTED_TEACHERS : [];
-
-        // Keep selected teacher ids in a Set
-        const selectedIds = new Set(preselected.map(id => parseInt(id, 10)));
-
-        function renderSelectedTeachers() {
-            selectedWrapper.innerHTML = '';
-
-            if (!selectedIds.size) {
-                const span = document.createElement('span');
-                span.className = 'text-[10px] text-slate-400';
-                span.textContent = 'No teacher selected.';
-                selectedWrapper.appendChild(span);
-                return;
-            }
-
-            selectedIds.forEach(id => {
-                const teacher = allTeachers.find(t => t.id === id);
-                if (!teacher) return;
-
-                const chip = document.createElement('div');
-                chip.className =
-                    'inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 ' +
-                    'border border-slate-300 text-slate-800';
-
-                const label = document.createElement('span');
-                label.textContent = teacher.label;
-
-                const removeBtn = document.createElement('button');
-                removeBtn.type = 'button';
-                removeBtn.textContent = '×';
-                removeBtn.className =
-                    'ml-1 rounded-full border border-slate-400 px-1 text-[10px] leading-none ' +
-                    'hover:bg-slate-200';
-                removeBtn.addEventListener('click', function () {
-                    selectedIds.delete(id);
-                    renderSelectedTeachers();
-                    renderTeacherResults();
-                });
-
-                chip.appendChild(label);
-                chip.appendChild(removeBtn);
-
-                // Hidden input for form submit
-                const hidden = document.createElement('input');
-                hidden.type  = 'hidden';
-                hidden.name  = 'teacher_ids[]';
-                hidden.value = id;
-
-                selectedWrapper.appendChild(chip);
-                selectedWrapper.appendChild(hidden);
-            });
-        }
-
-        function renderTeacherResults() {
-            teacherResults.innerHTML = '';
-
-            const term = (teacherSearch.value || '').toLowerCase().trim();
-
-            // nothing typed → show hint only
-            if (!term || term.length < 1) {
-                const hint = document.createElement('div');
-                hint.className = 'text-[10px] text-slate-400';
-                hint.textContent = 'Type teacher name above to search…';
-                teacherResults.appendChild(hint);
-                return;
-            }
-
-            let filtered = allTeachers.filter(t => !selectedIds.has(t.id));
-            filtered = filtered.filter(t => t.label.toLowerCase().includes(term));
-
-            if (!filtered.length) {
-                const empty = document.createElement('div');
-                empty.className = 'text-[10px] text-slate-400';
-                empty.textContent = 'No teacher found for this search.';
-                teacherResults.appendChild(empty);
-                return;
-            }
-
-            // show first 10 matches
-            filtered.slice(0, 10).forEach(t => {
-                const row = document.createElement('div');
-                row.className =
-                    'flex items-center justify-between rounded-md px-1.5 py-1 ' +
-                    'hover:bg-slate-100 cursor-default';
-
-                const label = document.createElement('span');
-                label.className = 'text-[11px] text-slate-800';
-                label.textContent = t.label;
-
-                const addBtn = document.createElement('button');
-                addBtn.type = 'button';
-                addBtn.className =
-                    'ml-2 inline-flex items-center justify-center rounded-full border border-emerald-500 ' +
-                    'px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ' +
-                    'hover:bg-emerald-50';
-                addBtn.innerHTML = '+';
-
-                addBtn.addEventListener('click', function () {
-                    selectedIds.add(t.id);
-                    teacherSearch.value = ''; // clear search
-                    renderSelectedTeachers();
-                    renderTeacherResults();
-                });
-
-                row.appendChild(label);
-                row.appendChild(addBtn);
-                teacherResults.appendChild(row);
-            });
-        }
-
-        if (teacherSearch && teacherResults && selectedWrapper) {
-            teacherSearch.addEventListener('input', renderTeacherResults);
-            renderSelectedTeachers();
-            renderTeacherResults();
-        }
-
-        // ---------- periods by shift ----------
-        let startOptionsOriginal = [];
-        let endOptionsOriginal   = [];
-
-        if (startPeriodSelect && endPeriodSelect) {
-            startOptionsOriginal = Array.from(startPeriodSelect.options).map(opt => ({
-                value: opt.value,
-                text: opt.textContent,
-                shift: (opt.getAttribute('data-shift') || '').toLowerCase()
+    {{-- Make teacher list available to JS --}}
+    <script>
+        window.ALL_TEACHERS = @json(
+            $teachers->map(function ($t) {
+                return [
+                    'id' => $t->id,
+                    'label' => $t->name . ($t->faculty?->code ? ' (' . $t->faculty->code . ')' : ''),
+                ];
             }));
 
-            endOptionsOriginal = Array.from(endPeriodSelect.options).map(opt => ({
-                value: opt.value,
-                text: opt.textContent,
-                shift: (opt.getAttribute('data-shift') || '').toLowerCase()
-            }));
-        }
+        // For create form we only keep old() selections
+        window.PRESELECTED_TEACHERS = @json(old('teacher_ids', []));
+    </script>
 
-        function filterPeriodsByShift() {
-            if (!shiftSelect || !startPeriodSelect || !endPeriodSelect) return;
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const shiftSelect = document.getElementById('shift_select');
+            const subjectBatchSelect = document.getElementById('subject_batch_select');
+            const groupSelect = document.getElementById('group_select');
 
-            const shift = (shiftSelect.value || '').toLowerCase();
-            startPeriodSelect.value = '';
-            endPeriodSelect.value   = '';
+            const startPeriodSelect = document.getElementById('start_period_select');
+            const endPeriodSelect = document.getElementById('end_period_select');
 
-            startPeriodSelect.innerHTML = '';
-            startOptionsOriginal.forEach(opt => {
-                if (!opt.value || !shift || opt.shift === shift) {
-                    const o = document.createElement('option');
-                    o.value = opt.value;
-                    o.textContent = opt.text;
-                    o.setAttribute('data-shift', opt.shift);
-                    startPeriodSelect.appendChild(o);
+            const facultySelect = document.getElementById('faculty_select');
+            const semesterSelect = document.getElementById('semester_select');
+            const batchSelect = document.getElementById('batch_select');
+            const sectionSelect = document.getElementById('section_select');
+            const subjectSelect = document.getElementById('subject_select');
+
+            const typeSelect = document.getElementById('type_select');
+            const typeHint = document.getElementById('type_hint');
+
+            // ---- Teacher search (chips + results) ----
+            const teacherSearch = document.getElementById('teacher_search'); // 🔴 missing before
+            const teacherResults = document.getElementById('teacher_results');
+            const selectedWrapper = document.getElementById('selected_teachers');
+
+            const allTeachers = Array.isArray(window.ALL_TEACHERS) ? window.ALL_TEACHERS : [];
+            const preselected = Array.isArray(window.PRESELECTED_TEACHERS) ? window.PRESELECTED_TEACHERS : [];
+
+            // Keep selected teacher ids in a Set
+            const selectedIds = new Set(preselected.map(id => parseInt(id, 10)));
+
+            function renderSelectedTeachers() {
+                selectedWrapper.innerHTML = '';
+
+                if (!selectedIds.size) {
+                    const span = document.createElement('span');
+                    span.className = 'text-[10px] text-slate-400';
+                    span.textContent = 'No teacher selected.';
+                    selectedWrapper.appendChild(span);
+                    return;
                 }
-            });
 
-            endPeriodSelect.innerHTML = '';
-            endOptionsOriginal.forEach(opt => {
-                if (!opt.value || !shift || opt.shift === shift) {
-                    const o = document.createElement('option');
-                    o.value = opt.value;
-                    o.textContent = opt.text;
-                    o.setAttribute('data-shift', opt.shift);
-                    endPeriodSelect.appendChild(o);
-                }
-            });
-        }
+                selectedIds.forEach(id => {
+                    const teacher = allTeachers.find(t => t.id === id);
+                    if (!teacher) return;
 
-        if (shiftSelect) {
-            shiftSelect.addEventListener('change', filterPeriodsByShift);
-        }
+                    const chip = document.createElement('div');
+                    chip.className =
+                        'inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 ' +
+                        'border border-slate-300 text-slate-800';
 
-        function filterEndByStart() {
-            if (!startPeriodSelect || !endPeriodSelect) return;
+                    const label = document.createElement('span');
+                    label.textContent = teacher.label;
 
-            const startVal = startPeriodSelect.value;
-            if (!startVal) {
-                endPeriodSelect.value = '';
-                return;
-            }
-
-            const shift      = (shiftSelect?.value || '').toLowerCase();
-            const startIndex = startOptionsOriginal.findIndex(o => o.value === startVal);
-
-            endPeriodSelect.innerHTML = '';
-            endOptionsOriginal.forEach((opt, idx) => {
-                if (!opt.value) {
-                    const o = document.createElement('option');
-                    o.value = opt.value;
-                    o.textContent = opt.text;
-                    endPeriodSelect.appendChild(o);
-                } else if (idx >= startIndex && (!shift || opt.shift === shift)) {
-                    const o = document.createElement('option');
-                    o.value = opt.value;
-                    o.textContent = opt.text;
-                    o.setAttribute('data-shift', opt.shift);
-                    endPeriodSelect.appendChild(o);
-                }
-            });
-        }
-
-        if (startPeriodSelect) {
-            startPeriodSelect.addEventListener('change', filterEndByStart);
-        }
-
-        // ---------- meta load (faculty + sem + subject_batch) ----------
-        function loadMeta() {
-            if (!facultySelect || !semesterSelect || !sectionSelect || !subjectSelect) return;
-
-            const facultyId = facultySelect.value;
-            const sem       = semesterSelect.value;
-            const batch     = batchSelect ? batchSelect.value : '';
-            const subjBatch = subjectBatchSelect ? subjectBatchSelect.value : '';
-
-            sectionSelect.innerHTML =
-                '<option value="">Select faculty, semester & subject batch first</option>';
-            subjectSelect.innerHTML =
-                '<option value="">Select faculty, semester & subject batch first</option>';
-
-            if (!facultyId || !sem || !subjBatch) return;
-
-            const url = '/admin/routines/meta' +
-                '?faculty_id=' + encodeURIComponent(facultyId) +
-                '&semester=' + encodeURIComponent(sem) +
-                '&batch=' + encodeURIComponent(batch || '') +
-                '&subject_batch=' + encodeURIComponent(subjBatch);
-
-            fetch(url, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            })
-                .then(res => res.json())
-                .then(data => {
-                    let secHtml = '<option value="">Select section</option>';
-                    (data.sections || []).forEach(sec => {
-                        secHtml += `<option value="${sec.id}">${sec.name}</option>`;
+                    const removeBtn = document.createElement('button');
+                    removeBtn.type = 'button';
+                    removeBtn.textContent = '×';
+                    removeBtn.className =
+                        'ml-1 rounded-full border border-slate-400 px-1 text-[10px] leading-none ' +
+                        'hover:bg-slate-200';
+                    removeBtn.addEventListener('click', function() {
+                        selectedIds.delete(id);
+                        renderSelectedTeachers();
+                        renderTeacherResults();
                     });
-                    sectionSelect.innerHTML = secHtml;
 
-                    let subHtml = '<option value="">Select subject</option>';
-                    (data.subjects || []).forEach(sub => {
-                        subHtml += `<option value="${sub.id}" data-has-practical="${sub.has_practical ? 1 : 0}">
+                    chip.appendChild(label);
+                    chip.appendChild(removeBtn);
+
+                    // Hidden input for form submit
+                    const hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = 'teacher_ids[]';
+                    hidden.value = id;
+
+                    selectedWrapper.appendChild(chip);
+                    selectedWrapper.appendChild(hidden);
+                });
+            }
+
+            function renderTeacherResults() {
+                teacherResults.innerHTML = '';
+
+                const term = (teacherSearch.value || '').toLowerCase().trim();
+
+                // nothing typed → show hint only
+                if (!term || term.length < 1) {
+                    const hint = document.createElement('div');
+                    hint.className = 'text-[10px] text-slate-400';
+                    hint.textContent = 'Type teacher name above to search…';
+                    teacherResults.appendChild(hint);
+                    return;
+                }
+
+                let filtered = allTeachers.filter(t => !selectedIds.has(t.id));
+                filtered = filtered.filter(t => t.label.toLowerCase().includes(term));
+
+                if (!filtered.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'text-[10px] text-slate-400';
+                    empty.textContent = 'No teacher found for this search.';
+                    teacherResults.appendChild(empty);
+                    return;
+                }
+
+                // show first 10 matches
+                filtered.slice(0, 10).forEach(t => {
+                    const row = document.createElement('div');
+                    row.className =
+                        'flex items-center justify-between rounded-md px-1.5 py-1 ' +
+                        'hover:bg-slate-100 cursor-default';
+
+                    const label = document.createElement('span');
+                    label.className = 'text-[11px] text-slate-800';
+                    label.textContent = t.label;
+
+                    const addBtn = document.createElement('button');
+                    addBtn.type = 'button';
+                    addBtn.className =
+                        'ml-2 inline-flex items-center justify-center rounded-full border border-emerald-500 ' +
+                        'px-2 py-0.5 text-[10px] font-semibold text-emerald-700 ' +
+                        'hover:bg-emerald-50';
+                    addBtn.innerHTML = '+';
+
+                    addBtn.addEventListener('click', function() {
+                        selectedIds.add(t.id);
+                        teacherSearch.value = ''; // clear search
+                        renderSelectedTeachers();
+                        renderTeacherResults();
+                    });
+
+                    row.appendChild(label);
+                    row.appendChild(addBtn);
+                    teacherResults.appendChild(row);
+                });
+            }
+
+            if (teacherSearch && teacherResults && selectedWrapper) {
+                teacherSearch.addEventListener('input', renderTeacherResults);
+                renderSelectedTeachers();
+                renderTeacherResults();
+            }
+
+            // ---------- periods by shift ----------
+            let startOptionsOriginal = [];
+            let endOptionsOriginal = [];
+
+            if (startPeriodSelect && endPeriodSelect) {
+                startOptionsOriginal = Array.from(startPeriodSelect.options).map(opt => ({
+                    value: opt.value,
+                    text: opt.textContent,
+                    shift: (opt.getAttribute('data-shift') || '').toLowerCase()
+                }));
+
+                endOptionsOriginal = Array.from(endPeriodSelect.options).map(opt => ({
+                    value: opt.value,
+                    text: opt.textContent,
+                    shift: (opt.getAttribute('data-shift') || '').toLowerCase()
+                }));
+            }
+
+            function filterPeriodsByShift() {
+                if (!shiftSelect || !startPeriodSelect || !endPeriodSelect) return;
+
+                const shift = (shiftSelect.value || '').toLowerCase();
+                startPeriodSelect.value = '';
+                endPeriodSelect.value = '';
+
+                startPeriodSelect.innerHTML = '';
+                startOptionsOriginal.forEach(opt => {
+                    if (!opt.value || !shift || opt.shift === shift) {
+                        const o = document.createElement('option');
+                        o.value = opt.value;
+                        o.textContent = opt.text;
+                        o.setAttribute('data-shift', opt.shift);
+                        startPeriodSelect.appendChild(o);
+                    }
+                });
+
+                endPeriodSelect.innerHTML = '';
+                endOptionsOriginal.forEach(opt => {
+                    if (!opt.value || !shift || opt.shift === shift) {
+                        const o = document.createElement('option');
+                        o.value = opt.value;
+                        o.textContent = opt.text;
+                        o.setAttribute('data-shift', opt.shift);
+                        endPeriodSelect.appendChild(o);
+                    }
+                });
+            }
+
+            if (shiftSelect) {
+                shiftSelect.addEventListener('change', filterPeriodsByShift);
+            }
+
+            function filterEndByStart() {
+                if (!startPeriodSelect || !endPeriodSelect) return;
+
+                const startVal = startPeriodSelect.value;
+                if (!startVal) {
+                    endPeriodSelect.value = '';
+                    return;
+                }
+
+                const shift = (shiftSelect?.value || '').toLowerCase();
+                const startIndex = startOptionsOriginal.findIndex(o => o.value === startVal);
+
+                endPeriodSelect.innerHTML = '';
+                endOptionsOriginal.forEach((opt, idx) => {
+                    if (!opt.value) {
+                        const o = document.createElement('option');
+                        o.value = opt.value;
+                        o.textContent = opt.text;
+                        endPeriodSelect.appendChild(o);
+                    } else if (idx >= startIndex && (!shift || opt.shift === shift)) {
+                        const o = document.createElement('option');
+                        o.value = opt.value;
+                        o.textContent = opt.text;
+                        o.setAttribute('data-shift', opt.shift);
+                        endPeriodSelect.appendChild(o);
+                    }
+                });
+            }
+
+            if (startPeriodSelect) {
+                startPeriodSelect.addEventListener('change', filterEndByStart);
+            }
+
+            // ---------- meta load (faculty + sem + subject_batch) ----------
+            function loadMeta() {
+                if (!facultySelect || !semesterSelect || !sectionSelect || !subjectSelect) return;
+
+                const facultyId = facultySelect.value;
+                const sem = semesterSelect.value;
+                const batch = batchSelect ? batchSelect.value : '';
+                const subjBatch = subjectBatchSelect ? subjectBatchSelect.value : '';
+
+                sectionSelect.innerHTML =
+                    '<option value="">Select faculty, semester & subject batch first</option>';
+                subjectSelect.innerHTML =
+                    '<option value="">Select faculty, semester & subject batch first</option>';
+
+                if (!facultyId || !sem || !subjBatch) return;
+
+                const url = '/admin/routines/meta' +
+                    '?faculty_id=' + encodeURIComponent(facultyId) +
+                    '&semester=' + encodeURIComponent(sem) +
+                    '&batch=' + encodeURIComponent(batch || '') +
+                    '&subject_batch=' + encodeURIComponent(subjBatch);
+
+                fetch(url, {
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        let secHtml = '<option value="">Select section</option>';
+                        (data.sections || []).forEach(sec => {
+                            secHtml += `<option value="${sec.id}">${sec.name}</option>`;
+                        });
+                        sectionSelect.innerHTML = secHtml;
+
+                        let subHtml = '<option value="">Select subject</option>';
+                        (data.subjects || []).forEach(sub => {
+                            subHtml += `<option value="${sub.id}" data-has-practical="${sub.has_practical ? 1 : 0}">
                             ${sub.code} - ${sub.name}
                         </option>`;
-                    });
-                    subjectSelect.innerHTML = subHtml;
+                        });
+                        subjectSelect.innerHTML = subHtml;
 
+                        updateTypeBySubject();
+                        updateGroupOptions();
+                    })
+                    .catch(err => {
+                        console.error('Error loading routine meta:', err);
+                        alert('Failed to load sections/subjects. Check console for details.');
+                    });
+            }
+
+            if (facultySelect && semesterSelect) {
+                facultySelect.addEventListener('change', loadMeta);
+                semesterSelect.addEventListener('change', loadMeta);
+                if (batchSelect) batchSelect.addEventListener('change', loadMeta);
+                if (subjectBatchSelect) subjectBatchSelect.addEventListener('change', loadMeta);
+            }
+
+            // ---------- subject -> TH/PR ----------
+            function updateTypeBySubject() {
+                if (!subjectSelect || !typeSelect) return;
+                const selected = subjectSelect.options[subjectSelect.selectedIndex];
+                const hasPractical = selected && selected.getAttribute('data-has-practical') === '1';
+                const prOption = typeSelect.querySelector('option[value="PR"]');
+
+                if (!hasPractical) {
+                    if (prOption) prOption.disabled = true;
+                    typeSelect.value = 'TH';
+                    if (typeHint) typeHint.textContent = '(no practical for this subject)';
+                } else {
+                    if (prOption) prOption.disabled = false;
+                    if (typeHint) typeHint.textContent = '(TH or PR allowed)';
+                }
+            }
+
+            // ---------- section + type -> group ----------
+            function updateGroupOptions() {
+                if (!groupSelect) return;
+
+                const sectionText = sectionSelect && sectionSelect.selectedIndex > -1 ?
+                    sectionSelect.options[sectionSelect.selectedIndex].text.trim() :
+                    '';
+
+                const typeVal = typeSelect ? typeSelect.value : 'TH';
+
+                groupSelect.innerHTML = '';
+
+                if (typeVal === 'TH') {
+                    const optAll = document.createElement('option');
+                    optAll.value = 'ALL';
+                    optAll.textContent = 'ALL (Theory combined)';
+                    groupSelect.appendChild(optAll);
+                    groupSelect.value = 'ALL';
+                    groupSelect.disabled = false;
+                    return;
+                }
+
+                const letters = sectionText.replace(/[^A-Za-z]/g, '').split('');
+                const uniqueLetters = [...new Set(letters)].slice(0, 4);
+
+                if (!uniqueLetters.length) {
+                    ['A', 'B'].forEach(l => {
+                        const o = document.createElement('option');
+                        o.value = l;
+                        o.textContent = l;
+                        groupSelect.appendChild(o);
+                    });
+                } else {
+                    uniqueLetters.forEach(l => {
+                        const o = document.createElement('option');
+                        o.value = l.toUpperCase();
+                        o.textContent = l.toUpperCase();
+                        groupSelect.appendChild(o);
+                    });
+                }
+
+                groupSelect.disabled = false;
+            }
+
+            if (subjectSelect) subjectSelect.addEventListener('change', updateTypeBySubject);
+            if (sectionSelect) sectionSelect.addEventListener('change', updateGroupOptions);
+            if (typeSelect) {
+                typeSelect.addEventListener('change', function() {
                     updateTypeBySubject();
                     updateGroupOptions();
-                })
-                .catch(err => {
-                    console.error('Error loading routine meta:', err);
-                    alert('Failed to load sections/subjects. Check console for details.');
-                });
-        }
-
-        if (facultySelect && semesterSelect) {
-            facultySelect.addEventListener('change', loadMeta);
-            semesterSelect.addEventListener('change', loadMeta);
-            if (batchSelect)        batchSelect.addEventListener('change', loadMeta);
-            if (subjectBatchSelect) subjectBatchSelect.addEventListener('change', loadMeta);
-        }
-
-        // ---------- subject -> TH/PR ----------
-        function updateTypeBySubject() {
-            if (!subjectSelect || !typeSelect) return;
-            const selected     = subjectSelect.options[subjectSelect.selectedIndex];
-            const hasPractical = selected && selected.getAttribute('data-has-practical') === '1';
-            const prOption     = typeSelect.querySelector('option[value="PR"]');
-
-            if (!hasPractical) {
-                if (prOption) prOption.disabled = true;
-                typeSelect.value = 'TH';
-                if (typeHint) typeHint.textContent = '(no practical for this subject)';
-            } else {
-                if (prOption) prOption.disabled = false;
-                if (typeHint) typeHint.textContent = '(TH or PR allowed)';
-            }
-        }
-
-        // ---------- section + type -> group ----------
-        function updateGroupOptions() {
-            if (!groupSelect) return;
-
-            const sectionText = sectionSelect && sectionSelect.selectedIndex > -1
-                ? sectionSelect.options[sectionSelect.selectedIndex].text.trim()
-                : '';
-
-            const typeVal = typeSelect ? typeSelect.value : 'TH';
-
-            groupSelect.innerHTML = '';
-
-            if (typeVal === 'TH') {
-                const optAll = document.createElement('option');
-                optAll.value = 'ALL';
-                optAll.textContent = 'ALL (Theory combined)';
-                groupSelect.appendChild(optAll);
-                groupSelect.value    = 'ALL';
-                groupSelect.disabled = false;
-                return;
-            }
-
-            const letters       = sectionText.replace(/[^A-Za-z]/g, '').split('');
-            const uniqueLetters = [...new Set(letters)].slice(0, 4);
-
-            if (!uniqueLetters.length) {
-                ['A', 'B'].forEach(l => {
-                    const o = document.createElement('option');
-                    o.value = l;
-                    o.textContent = l;
-                    groupSelect.appendChild(o);
-                });
-            } else {
-                uniqueLetters.forEach(l => {
-                    const o = document.createElement('option');
-                    o.value = l.toUpperCase();
-                    o.textContent = l.toUpperCase();
-                    groupSelect.appendChild(o);
                 });
             }
 
-            groupSelect.disabled = false;
-        }
-
-        if (subjectSelect) subjectSelect.addEventListener('change', updateTypeBySubject);
-        if (sectionSelect) sectionSelect.addEventListener('change', updateGroupOptions);
-        if (typeSelect) {
-            typeSelect.addEventListener('change', function () {
-                updateTypeBySubject();
-                updateGroupOptions();
-            });
-        }
-
-        // initial
-        if (sectionSelect) updateGroupOptions();
-        if (subjectSelect) updateTypeBySubject();
-    });
-</script>
+            // initial
+            if (sectionSelect) updateGroupOptions();
+            if (subjectSelect) updateTypeBySubject();
+        });
+    </script>
 
 @endsection

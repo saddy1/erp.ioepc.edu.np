@@ -77,12 +77,27 @@
       </p>
     </div>
 
-    <div class="pt-2">
-      <button type="submit" class="rounded-xl bg-gray-900 text-white px-6 py-2 text-sm font-semibold hover:bg-gray-800">
+    <div class="pt-2 m-auto flex gap-4">
+    <button type="submit"
+        class="rounded-xl bg-gray-900 text-white px-6 py-2 text-sm font-semibold hover:bg-gray-800">
         Import Students
-      </button>
-    </div>
+    </button>
+
+    
+</div>
+
+    
   </form>
+  <div class="flex justify-end">
+    <a href="{{ route('admin.cr_roles.index') }}">
+        <button 
+            class="rounded-xl bg-red-900 text-white px-6 py-2 text-sm font-semibold hover:bg-green-800">
+            CR/Vice-CR
+        </button>
+    </a>
+    
+</div>
+
 </div>
 
 <script>

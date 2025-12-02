@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 use App\Models\Admin;
+use App\Models\Student;
+use App\Models\Teacher;
 
 
 class DashboardController extends Controller
@@ -17,4 +19,19 @@ class DashboardController extends Controller
  
       return view('Backend.dashboard.index', compact('admin'));
      }
+     public function student()
+    {
+        $student = Student::find(session('student_id'));
+
+        // You can change this view path as you like
+        return view('Frontend.dashboard.student', compact('student'));
+    }
+
+    public function teacher()
+    {
+        $teacher = Teacher::find(session('teacher_id'));
+
+        // You can change this view path as you like
+        return view('Frontend.dashboard.teacher', compact('teacher'));
+    }
 }

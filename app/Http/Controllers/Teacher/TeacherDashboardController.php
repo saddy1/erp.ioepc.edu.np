@@ -13,6 +13,7 @@ use Carbon\Carbon;
 
 class TeacherDashboardController extends Controller
 {
+    
     public function index(Request $request)
     {
         $teacher = Teacher::with('faculty')->findOrFail(session('teacher_id'));

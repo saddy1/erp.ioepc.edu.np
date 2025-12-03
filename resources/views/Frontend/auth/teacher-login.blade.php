@@ -31,11 +31,19 @@
         <!-- Header -->
 
 
+
         <div
             class="min-h-screen flex items-center justify-center bg-gradient-to-r from-slate-100 via-blue-100 to-slate-200 p-4">
             <div class="w-full max-w-md bg-white p-6 rounded-2xl shadow-lg border border-slate-200">
 
                 <!-- Heading -->
+
+@if(session('success'))
+<div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+    {{ session('success') }}
+</div>
+@endif
+
                 <div class="text-center mb-6">
                     <h1 class="text-2xl font-bold text-blue-900">Teacher's Login</h1>
                     <p class="text-sm text-slate-600 mt-1">

@@ -18,6 +18,7 @@ class Teacher extends Model
         'faculty_id',
         'is_active',
         'password',
+        'must_change_password',
     ];
 
     protected $hidden = ['password'];

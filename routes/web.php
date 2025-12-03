@@ -16,12 +16,7 @@ use App\Http\Controllers\Teacher\TeacherDashboardController;
 use App\Http\Controllers\Teacher\AttendanceController;
 use App\Http\Controllers\Student\StudentDashboardController;
 use App\Http\Controllers\Admin\CrRoleController;
-
-
-
-
-
-
+use Illuminate\Support\Facades\Auth;
 
 /*
 |--------------------------------------------------------------------------
@@ -100,6 +95,10 @@ Route::group(['middleware' => 'teacher.auth'], function () {
     // ✅ NEW: no {routine} here
     Route::post('/teacher/attendance', [AttendanceController::class, 'store'])
         ->name('teacher.attendance.store');
+
+
+        Route::post('/teacher/update-password', [AuthController::class, 'forcePasswordUpdate'])
+     ->name('teacher.force.password.update');
 
     Route::post('/logout/teacher', [AuthController::class, 'logoutTeacher'])
         ->name('teacher.logout');

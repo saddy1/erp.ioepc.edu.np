@@ -34,7 +34,13 @@ use App\Http\Controllers\Admin\CrRoleController;
 |
 */
 
-// STUDENT AUTH
+
+Route::get('/', function () {
+    return view('welcome');
+});
+// STUDENT AUT
+
+
 Route::get('/login/student', [AuthController::class, 'showStudentLogin'])->name('student.login.form');
 Route::post('/login/student', [AuthController::class, 'studentLogin'])->name('student.login');
 
@@ -58,26 +64,46 @@ Route::post('/login/teacher', [AuthController::class, 'teacherLogin'])->name('te
 
 
 
-// STUDENT AREA (CR/VCR only)
+// STUDENT AREA - FIXED ROUTE ORDER
 Route::group(['middleware' => 'student.auth'], function () {
-    Route::get('/dashboard/student', [StudentDashboardController::class, 'index'])->name('student.dashboard');
-    Route::get('/student/routine', [StudentDashboardController::class, 'routine'])->name('student.routine');
+    Route::get('/dashboard/student', [StudentDashboardController::class, 'index'])
+        ->name('student.dashboard');
+    
+    Route::get('/student/routine', [StudentDashboardController::class, 'routine'])
+        ->name('student.routine');
 
     Route::post('/student/class-feedback', [ClassFeedbackController::class, 'store'])
         ->name('student.class_feedback.store');
+
+    // ✅ PUT SPECIFIC ROUTES BEFORE DYNAMIC ROUTES
+    // This MUST come before the {routine} route
+    Route::post('/student/routine-feedback/bulk', [StudentDashboardController::class, 'bulkUpdate'])
+        ->name('student.routine-feedback.bulk');
+    
+    // This MUST come after the /bulk route
+    Route::post('/student/routine-feedback/{routine}', [StudentDashboardController::class, 'storeFeedback'])
+        ->name('student.routine-feedback.store');
+
+        Route::post('/logout/student', [AuthController::class, 'logoutStudent'])
+    ->name('student.logout');
+
 });
 
-// TEACHER AREA
 Route::group(['middleware' => 'teacher.auth'], function () {
-    Route::get('/dashboard/teacher', [TeacherDashboardController::class, 'index'])->name('teacher.dashboard');
+    Route::get('/dashboard/teacher', [TeacherDashboardController::class, 'index'])
+        ->name('teacher.dashboard');
 
+    // You can keep this GET if you still need a separate "show" page:
     Route::get('/teacher/attendance/{routine}', [AttendanceController::class, 'show'])
         ->name('teacher.attendance.show');
 
-    Route::post('/teacher/attendance/{routine}', [AttendanceController::class, 'store'])
+    // ✅ NEW: no {routine} here
+    Route::post('/teacher/attendance', [AttendanceController::class, 'store'])
         ->name('teacher.attendance.store');
-});
 
+    Route::post('/logout/teacher', [AuthController::class, 'logoutTeacher'])
+        ->name('teacher.logout');
+});
 
 Route::group(['middleware' => 'admin.auth'], function () {
     Route::get('/dashboard/admin', [DashboardController::class, 'admin'])->name('admin.dashboard');
@@ -112,13 +138,12 @@ Route::group(['middleware' => 'admin.auth'], function () {
 
 
 
-          // CR / VCR assignment routes
+        // CR / VCR assignment routes
         Route::get('cr-roles', [CrRoleController::class, 'index'])
             ->name('admin.cr_roles.index');
 
         Route::post('cr-roles', [CrRoleController::class, 'save'])
             ->name('admin.cr_roles.save');
-
     });
 
 

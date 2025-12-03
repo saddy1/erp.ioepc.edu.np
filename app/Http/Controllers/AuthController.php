@@ -110,10 +110,25 @@ public function teacherLogin(Request $request)
     session(['teacher_id' => $teacher->id]);
     return redirect()->route('teacher.dashboard');
 }
+public function logoutStudent(Request $request)
+{
+    session()->forget(['student_id']);
+    $request->session()->invalidate();
+    $request->session()->regenerateToken();
 
+    return redirect()->route('student.login.form')->with('ok', 'Logged out successfully.');
+}
+public function logoutTeacher(Request $request)
+{
+    session()->forget(keys: ['teacher_id']);
+    $request->session()->invalidate();
+    $request->session()->regenerateToken();
+
+    return redirect()->route('teacher.login.form')->with('ok', 'Logged out successfully.');
+}
     public function logout()
 {
-    session()->forget(['admin_id', 'student_id', 'teacher_id']);
+    session()->forget(keys: ['admin_id']);
     return redirect()->route('admin.login.form')->with('success', 'Logged out successfully.');
 }
 

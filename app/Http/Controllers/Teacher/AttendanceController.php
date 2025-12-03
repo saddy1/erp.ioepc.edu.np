@@ -1,113 +1,97 @@
 <?php
-// app/Http/Controllers/Teacher/AttendanceController.php
 
 namespace App\Http\Controllers\Teacher;
 
 use App\Http\Controllers\Controller;
 use App\Models\Attendance;
 use App\Models\Routine;
-use App\Models\Student;
 use Illuminate\Http\Request;
 
 class AttendanceController extends Controller
 {
-    public function show(Routine $routine)
+    public function store(Request $request)
     {
         $teacherId = session('teacher_id');
-        $today = now()->toDateString();
-
-        // Guard: teacher must be assigned to this routine
-        if (!$this->teacherAssignedToRoutine($teacherId, $routine)) {
-            abort(403, 'Not your class.');
-        }
-
-        // Guard: only today allowed
-        $map = [
-            'Sun' => 'sun',
-            'Mon' => 'mon',
-            'Tue' => 'tue',
-            'Wed' => 'wed',
-            'Thu' => 'thu',
-            'Fri' => 'fri',
-            'Sat' => 'sat',
-        ];
-        $todayDow = $map[now()->format('D')] ?? null;
-
-        if ($routine->day_of_week !== $todayDow) {
-            abort(403, 'You can take attendance only for today\'s classes.');
-        }
-
-        // Students of that faculty/batch/semester/section
-        $students = Student::where('faculty_id', $routine->faculty_id)
-            ->where('section_id', $routine->section_id)
-            ->where('batch', $routine->batch)
-            ->where('semester', $routine->semester)
-            ->orderBy('symbol_no')
-            ->get();
-
-        // Existing attendance (if already taken)
-        $existing = Attendance::where('routine_id', $routine->id)
-            ->where('date', $today)
-            ->get()
-            ->keyBy('student_id');
-
-        return view('Frontend.teacher.attendance', compact(
-            'routine', 'students', 'existing', 'today'
-        ));
-    }
-
-    public function store(Request $request, Routine $routine)
-    {
-        $teacherId = session('teacher_id');
-        $today = now()->toDateString();
-
-        if (!$this->teacherAssignedToRoutine($teacherId, $routine)) {
-            abort(403, 'Not your class.');
-        }
-
-        $map = [
-            'Sun' => 'sun',
-            'Mon' => 'mon',
-            'Tue' => 'tue',
-            'Wed' => 'wed',
-            'Thu' => 'thu',
-            'Fri' => 'fri',
-            'Sat' => 'sat',
-        ];
-        $todayDow = $map[now()->format('D')] ?? null;
-
-        if ($routine->day_of_week !== $todayDow) {
-            abort(403, 'You can take attendance only for today\'s classes.');
-        }
+        $today     = now()->toDateString();
 
         $data = $request->validate([
-            'status'   => ['required', 'array'],
-            'status.*' => ['required', 'in:P,A'], // key = student_id
+            'date'         => ['required', 'date'],
+            'routine_ids'  => ['required', 'array'],
+            'routine_ids.*'=> ['exists:routines,id'],
+            'attendance'   => ['required', 'array'],
         ]);
 
-        foreach ($data['status'] as $studentId => $status) {
-            Attendance::updateOrCreate(
-                [
-                    'routine_id' => $routine->id,
-                    'student_id' => $studentId,
-                    'date'       => $today,
-                ],
-                [
-                    'teacher_id' => $teacherId,
-                    'status'     => $status,
-                ]
-            );
+        if ($data['date'] !== $today) {
+            return back()->with('error', 'You can only mark attendance for today.');
         }
 
-        return redirect()->route('teacher.dashboard')->with('ok', 'Attendance saved.');
-    }
+        // Map today to slug
+        $dayShort = now()->format('D');
+        $mapDow   = [
+            'Sun' => 'sun',
+            'Mon' => 'mon',
+            'Tue' => 'tue',
+            'Wed' => 'wed',
+            'Thu' => 'thu',
+            'Fri' => 'fri',
+            'Sat' => 'sat',
+        ];
+        $todaySlug = $mapDow[$dayShort] ?? 'sun';
 
-    private function teacherAssignedToRoutine(int $teacherId, Routine $routine): bool
-    {
-        if ($routine->teacher_id == $teacherId) {
-            return true;
+        // Load all routines in this merged block
+        $routines = Routine::with('teachers')
+            ->whereIn('id', $data['routine_ids'])
+            ->get();
+
+        if ($routines->isEmpty()) {
+            return back()->with('error', 'No valid class found for attendance.');
         }
 
-        return $routine->teachers()->where('teacher_id', $teacherId)->exists();
+        // Verify all routines belong to this teacher and are for today
+        foreach ($routines as $routine) {
+            $isOwn = $routine->teacher_id == $teacherId ||
+                $routine->teachers()->where('teacher_id', $teacherId)->exists();
+
+            if (!$isOwn || $routine->day_of_week !== $todaySlug) {
+                return back()->with('error', 'You are not allowed to mark attendance for one or more selected classes.');
+            }
+        }
+
+        // Counters (per student, not multiplied by number of periods)
+        $presentCount = 0;
+        $absentCount  = 0;
+
+        foreach ($data['attendance'] as $studentId => $status) {
+            $finalStatus = $status === 'A' ? 'A' : 'P';
+
+            // Save for each routine in this merged block
+            foreach ($routines as $routine) {
+                Attendance::updateOrCreate(
+                    [
+                        'routine_id' => $routine->id,
+                        'student_id' => $studentId,
+                        'date'       => $today,
+                    ],
+                    [
+                        'teacher_id' => $teacherId,
+                        'status'     => $finalStatus,
+                    ]
+                );
+            }
+
+            if ($finalStatus === 'P') {
+                $presentCount++;
+            } else {
+                $absentCount++;
+            }
+        }
+
+        $totalStudents = count($data['attendance']);
+        $message = "Attendance saved successfully! Total: {$totalStudents} | Present: {$presentCount} | Absent: {$absentCount}";
+
+        // Go back to dashboard WITHOUT merged param => students panel hidden
+        return redirect()
+            ->route('teacher.dashboard')
+            ->with('ok', $message);
     }
 }

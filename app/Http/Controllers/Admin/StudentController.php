@@ -19,96 +19,118 @@ class StudentController extends Controller
         return view('Backend.admin.students.import', compact('faculties'));
     }
 
-    public function import(Request $r)
-    {
-        $data = $r->validate([
-            'batch'      => ['required', 'string', 'max:30'],
-            'faculty_id' => ['required', 'exists:faculties,id'],
-            'section_id' => ['required', 'exists:sections,id'],
-            'file'       => ['required', 'file', 'mimes:csv,txt'], // CSV parsing here
-        ]);
+public function import(Request $r)
+{
+    $data = $r->validate([
+        'batch'      => ['required', 'string', 'max:30'],
+        'faculty_id' => ['required', 'exists:faculties,id'],
+        'section_id' => ['required', 'exists:sections,id'],
+        'file'       => ['required', 'file', 'mimes:csv,txt'],
+    ]);
 
-        $facultyId = (int) $data['faculty_id'];
-        $sectionId = (int) $data['section_id'];
-        $batch     = $data['batch'];
+    $facultyId = (int) $data['faculty_id'];
+    $sectionId = (int) $data['section_id'];
+    $batch     = $data['batch'];
 
-        $file = $r->file('file');
+    $file   = $r->file('file');
+    $handle = fopen($file->getRealPath(), 'r');
 
-        $handle = fopen($file->getRealPath(), 'r');
-        if (!$handle) {
-            return back()->with('error', 'Unable to open file.');
-        }
+    if (!$handle) {
+        return back()->with('error', 'Unable to open the uploaded CSV file.');
+    }
 
-        $imported = 0;
+    $imported = 0;
+    $row      = 0;
 
-        DB::transaction(function () use ($handle, &$imported, $facultyId, $sectionId, $batch) {
-            $row = 0;
-            while (($cols = fgetcsv($handle, 0, ',')) !== false) {
-                $row++;
+    DB::beginTransaction();
 
-                // Expect: roll, name, contact, email, father, mother, gender, municipal/vdc, ward, district, year, part
-                if ($row === 1) {
-                    // Try to detect header row (starts with "roll" or similar)
-                    $first = strtolower(trim($cols[0] ?? ''));
-                    if (str_contains($first, 'roll') || str_contains($first, 'symbol')) {
-                        continue;
-                    }
-                }
+    try {
+        while (($cols = fgetcsv($handle, 0, ',')) !== false) {
+            $row++;
 
-                if (count($cols) < 12) {
-                    continue; // skip invalid rows
-                }
+            // Trim all columns
+            $cols = array_map('trim', $cols);
 
-                $symbolNo    = trim($cols[0]);
-                $name        = trim($cols[1]);
-                $contact     = trim($cols[2] ?? '');
-                $email       = trim($cols[3] ?? '');
-                $fatherName  = trim($cols[4] ?? '');
-                $motherName  = trim($cols[5] ?? '');
-                $gender      = trim($cols[6] ?? '');
-                $municipal   = trim($cols[7] ?? '');
-                $ward        = trim($cols[8] ?? '');
-                $district    = trim($cols[9] ?? '');
-                $year        = (int) ($cols[10] ?? 1);
-                $part        = (int) ($cols[11] ?? 1);
-
-                if ($symbolNo === '' || $name === '') {
+            // Skip header row (first row) if looks like header
+            if ($row === 1) {
+                $col0 = strtolower($cols[0] ?? '');
+                $col1 = strtolower($cols[1] ?? '');
+                if (str_contains($col0, 'roll') || str_contains($col1, 'name')) {
                     continue;
                 }
-
-                $semester = (($year - 1) * 2) + ($part === 2 ? 2 : 1);
-
-                Student::updateOrCreate(
-                    ['symbol_no' => $symbolNo],
-                    [
-                        'name'         => $name,
-                        'faculty_id'   => $facultyId,
-                        'section_id'   => $sectionId,
-                        'batch'        => $batch,
-                        'year'         => $year,
-                        'part'         => $part,
-                        'semester'     => $semester,
-                        'contact'      => $contact,
-                        'email'        => $email,
-                        'father_name'  => $fatherName,
-                        'mother_name'  => $motherName,
-                        'gender'       => $gender,
-                        'municipality' => $municipal,
-                        'ward'         => $ward,
-                        'district'     => $district,
-                    ]
-                );
-
-                $imported++;
             }
 
-            fclose($handle);
-        });
+            // Validate column count (13 in BAG.csv)
+            if (count($cols) !== 13) {
+                throw new \Exception("Invalid column count at row {$row}. Expected 13 columns, found " . count($cols));
+            }
 
-        return redirect()
-            ->route('students.import.form')
-            ->with('ok', "Imported / updated {$imported} students for batch {$batch}.");
+            // Map columns
+            $symbolNo   = $cols[0];  // roll_no
+            $name       = $cols[1];  // name
+            $contact    = $cols[2];  // phone_no
+            $email      = $cols[3];  // email
+            $fatherName = $cols[4];  // FatherName
+            $motherName = $cols[5];  // MotherName
+            $gender     = $cols[6];  // gender
+            $municipal  = $cols[7];  // vdc_municipal
+            $ward       = $cols[8];  // ward_no
+            $district   = $cols[9];  // district
+            $year       = (int)($cols[10] ?? 1); // year
+            $part       = (int)($cols[11] ?? 1); // part
+            $dob        = $cols[12] ?? null;     // dob (string, BS)
+
+            // Basic sanity check
+            if ($symbolNo === '' || $name === '') {
+                throw new \Exception("Empty roll no or name at row {$row}.");
+            }
+
+            // Compute semester from year & part (1→1-2, 2→3-4, etc.)
+            $semester = (($year - 1) * 2) + ($part === 2 ? 2 : 1);
+
+            // Avoid duplicate roll numbers (by symbol_no)
+            if (Student::where('symbol_no', $symbolNo)->exists()) {
+                // skip duplicates silently, or:
+                // throw new \Exception("Duplicate roll/ symbol_no '{$symbolNo}' at row {$row}.");
+                continue;
+            }
+
+            Student::create([
+                'symbol_no'    => $symbolNo,
+                'name'         => $name,
+                'contact'      => $contact,
+                'email'        => $email,
+                'father_name'  => $fatherName,
+                'mother_name'  => $motherName,
+                'gender'       => $gender,
+                'municipality' => $municipal,
+                'ward'         => $ward,
+                'district'     => $district,
+                'year'         => $year,
+                'part'         => $part,
+                'dob'          => $dob,
+                'faculty_id'   => $facultyId,
+                'section_id'   => $sectionId,
+                'batch'        => $batch,
+                'semester'     => $semester,
+            ]);
+
+            $imported++;
+        }
+
+        DB::commit();
+        fclose($handle);
+
+        return back()->with('ok', "Imported {$imported} students successfully.");
+    } catch (\Throwable $e) {
+        DB::rollBack();
+        fclose($handle);
+
+        // Show row + message in frontend
+        return back()->with('error', "Import failed at row {$row}: " . $e->getMessage());
     }
+}
+
 
     // ===== Bulk semester upgrade: year/part -> next year/part for a batch =====
 

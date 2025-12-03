@@ -11,15 +11,17 @@ class DemoSeeder extends Seeder
   public function run()
   {
     $f = collect([
-      ['name' => 'Civil Engineering', 'code' => 'BCE'],
-      ['name' => 'Electrical Engineering', 'code' => 'BEL'],
-      ['name' => 'Electronics, Communication & Information Engineering', 'code' => 'BEI'],
-      ['name' => 'Electronics & Communiaction Engineering', 'code' => 'BEX'],
       ['name' => 'Computer Engineering', 'code' => 'BCT'],
-      ['name' => 'Mechanical Engineering', 'code' => 'BME'],
-      ['name' => 'Agriculture Engineering', 'code' => 'BAG'],
-      ['name' => 'Bachelor in Architecture', 'code' => 'BAR'],
+      ['name' => 'Electronics, Communication & Information Engineering', 'code' => 'BEI'],
+       ['name' => 'Electrical Engineering', 'code' => 'BEL'],
+       ['name' => 'Electronics & Communiaction Engineering', 'code' => 'BEX'],
+         ['name' => 'Mechanical Engineering', 'code' => 'BME'],
+      ['name' => 'Civil Engineering', 'code' => 'BCE'],
+      
+     ['name' => 'Bachelor in Architecture', 'code' => 'BAR'],
 
+      ['name' => 'Agriculture Engineering', 'code' => 'BAG'],
+     
     ])->map(fn($x) => Faculty::create($x));
 
    

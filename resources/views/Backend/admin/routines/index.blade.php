@@ -1,6 +1,46 @@
 @extends('Backend.layouts.app')
 
 @section('content')
+
+@section('content')
+  @section('content')
+    <style>
+        /* Force landscape print */
+        @page {
+            size: A4 landscape;   /* or just "landscape" if you don’t care about A4 */
+            margin: 10mm;
+        }
+
+        /* Make every cell of routine table have borders */
+        .routine-table th,
+        .routine-table td {
+            border: 1px solid #0f172a; /* slate-900-ish */
+        }
+
+        /* Print only routine card */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #routine-print-card,
+            #routine-print-card * {
+                visibility: visible;
+            }
+            #routine-print-card {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 8px;
+            }
+
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+
     <div class="max-w-7xl mx-auto p-3 sm:p-4 text-xs">
 
         {{-- Flash messages --}}
@@ -333,7 +373,9 @@
                                 $normalizedShift = strtolower(trim($p->shift ?? ''));
                             @endphp
                             <option value="{{ $p->id }}" data-shift="{{ $normalizedShift }}">
-                                {{ $p->label }} ({{ $p->start_time }}–{{ $p->end_time }})
+                                {{ $p->label }}
+                                ({{ \Carbon\Carbon::parse($p->start_time)->format('g:i A') }} –
+                                {{ \Carbon\Carbon::parse($p->end_time)->format('g:i A') }})
                             </option>
                         @endforeach
                     </select>
@@ -354,7 +396,9 @@
                                 $normalizedShift = strtolower(trim($p->shift ?? ''));
                             @endphp
                             <option value="{{ $p->id }}" data-shift="{{ $normalizedShift }}">
-                                {{ $p->label }} ({{ $p->start_time }}–{{ $p->end_time }})
+                                {{ $p->label }}
+                                ({{ \Carbon\Carbon::parse($p->start_time)->format('g:i A') }} –
+                                {{ \Carbon\Carbon::parse($p->end_time)->format('g:i A') }})
                             </option>
                         @endforeach
                     </select>
@@ -424,8 +468,10 @@
             $periodCount = $periods->count();
         @endphp
 
-        {{-- Routine Grid --}}
-        <div class="mt-6 rounded-2xl border border-slate-900 bg-white p-3 sm:p-4 shadow-sm">
+   {{-- Routine Grid --}}
+<div id="routine-print-card"
+     class="mt-6 rounded-2xl border border-slate-900 bg-white p-3 sm:p-4 shadow-sm">
+
             {{-- Header + Print --}}
             <div class="mb-3 flex items-start justify-between">
                 <div class="flex-1 text-center text-[11px] leading-tight">
@@ -444,11 +490,13 @@
                     @endif
                 </div>
 
-                <button type="button" onclick="window.print()"
-                    class="ml-3 rounded-lg border border-slate-300 bg-white px-1 py-1.5 text-[11px] font-medium text-slate-700
-                       hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-400">
-                    Print
-                </button>
+                <button type="button"
+        onclick="window.print()"
+        class="no-print ml-3 rounded-lg border border-slate-300 bg-white px-1 py-1.5 text-[11px] font-medium text-slate-700
+               hover:bg-slate-50 focus:outline-none focus:ring-1 focus:ring-slate-400">
+    Print
+</button>
+
             </div>
 
             @php
@@ -460,7 +508,8 @@
             @endphp
 
             <div class="overflow-x-auto rounded-xl border border-slate-900">
-                <table class="min-w-full border-collapse text-[11px]">
+    <table class="routine-table min-w-full border-collapse text-[11px]">
+
                     <thead>
                         <tr class="bg-slate-50">
                             <th
@@ -475,10 +524,11 @@
                                 <th class="border-b-2 border-l border-slate-900 px-2 py-1 text-center align-middle">
                                     <div class="font-semibold text-slate-800">{{ $p->order }}</div>
                                     <div class="mt-0.5 text-[10px] text-slate-900">
-                                        {{ \Carbon\Carbon::parse($p->start_time)->format('g:i') }}
+                                        {{ \Carbon\Carbon::parse($p->start_time)->format('g:i A') }}
                                         –
                                         {{ \Carbon\Carbon::parse($p->end_time)->format('g:i A') }}
                                     </div>
+
                                 </th>
                             @endforeach
                         </tr>
@@ -650,7 +700,7 @@
 
                                             @php $i += $span; @endphp
                                         @else
-                                            <td class="px-2 py-1 border-l border-slate-900 bg-white">
+                                            <td class="px-2 py-1 border-l border-r border-slate-900 bg-white">
                                                 <div class="h-8"></div>
                                             </td>
                                             @php $i++; @endphp

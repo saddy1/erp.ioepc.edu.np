@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Hash;
 
 class Student extends Model
 {
+      protected $guarded = [];
     protected $fillable = [
         'symbol_no',
         'name',

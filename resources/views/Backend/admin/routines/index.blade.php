@@ -1049,48 +1049,69 @@
             }
 
             // ---------- section + type -> group ----------
-            function updateGroupOptions() {
-                if (!groupSelect) return;
+          function updateGroupOptions() {
+    if (!groupSelect) return;
 
-                const sectionText = sectionSelect && sectionSelect.selectedIndex > -1 ?
-                    sectionSelect.options[sectionSelect.selectedIndex].text.trim() :
-                    '';
+    const sectionText = sectionSelect && sectionSelect.selectedIndex > -1
+        ? sectionSelect.options[sectionSelect.selectedIndex].text.trim()
+        : '';
 
-                const typeVal = typeSelect ? typeSelect.value : 'TH';
+    const typeVal = typeSelect ? typeSelect.value : 'TH';
 
-                groupSelect.innerHTML = '';
+    groupSelect.innerHTML = '';
 
-                if (typeVal === 'TH') {
-                    const optAll = document.createElement('option');
-                    optAll.value = 'ALL';
-                    optAll.textContent = 'ALL (Theory combined)';
-                    groupSelect.appendChild(optAll);
-                    groupSelect.value = 'ALL';
-                    groupSelect.disabled = false;
-                    return;
-                }
+    // For Theory: Only ALL
+    if (typeVal === 'TH') {
+        const optAll = document.createElement('option');
+        optAll.value = 'ALL';
+        optAll.textContent = 'ALL (Theory combined)';
+        groupSelect.appendChild(optAll);
+        groupSelect.value = 'ALL';
+        groupSelect.disabled = false;
+        return;
+    }
 
-                const letters = sectionText.replace(/[^A-Za-z]/g, '').split('');
-                const uniqueLetters = [...new Set(letters)].slice(0, 4);
+    // Extract letters (A, B, C...)
+    const letters = sectionText.replace(/[^A-Za-z]/g, '').split('');
+    const uniqueLetters = [...new Set(letters)].slice(0, 4);
 
-                if (!uniqueLetters.length) {
-                    ['A', 'B'].forEach(l => {
-                        const o = document.createElement('option');
-                        o.value = l;
-                        o.textContent = l;
-                        groupSelect.appendChild(o);
-                    });
-                } else {
-                    uniqueLetters.forEach(l => {
-                        const o = document.createElement('option');
-                        o.value = l.toUpperCase();
-                        o.textContent = l.toUpperCase();
-                        groupSelect.appendChild(o);
-                    });
-                }
+    let finalGroups = [];
 
-                groupSelect.disabled = false;
+    if (!uniqueLetters.length) {
+        finalGroups = ['A', 'B'];
+    } else {
+        // Single groups: A, B, C...
+        finalGroups = [...uniqueLetters.map(l => l.toUpperCase())];
+    }
+
+    // Generate pair combinations: A/B, B/A etc.
+    const pairGroups = [];
+    for (let i = 0; i < finalGroups.length; i++) {
+        for (let j = 0; j < finalGroups.length; j++) {
+            if (i !== j) {
+                pairGroups.push(`${finalGroups[i]}/${finalGroups[j]}`);
             }
+        }
+    }
+
+    // Add singles first
+    finalGroups.forEach(l => {
+        const o = document.createElement('option');
+        o.value = l;
+        o.textContent = l;
+        groupSelect.appendChild(o);
+    });
+
+    // Add pair combinations
+    pairGroups.forEach(combo => {
+        const o = document.createElement('option');
+        o.value = combo;
+        o.textContent = combo;
+        groupSelect.appendChild(o);
+    });
+
+    groupSelect.disabled = false;
+}
 
             if (subjectSelect) subjectSelect.addEventListener('change', updateTypeBySubject);
             if (sectionSelect) sectionSelect.addEventListener('change', updateGroupOptions);

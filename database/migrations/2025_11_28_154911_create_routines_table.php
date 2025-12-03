@@ -24,7 +24,7 @@ return new class extends Migration
 
             // Group & type
             // ALL = whole section together (theory), A/B = split for practicals
-            $table->enum('group', ['ALL','A','B'])->default('ALL');
+            $table->enum('group', ['ALL','A','B','A/B','B/A','C/D','D/C','E/F','F/E','C','D','E','F'])->default('ALL');
             $table->enum('type', ['TH','PR'])->default('TH');
 
             // Teaching info

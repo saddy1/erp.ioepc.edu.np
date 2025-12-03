@@ -59,7 +59,7 @@
             <!-- Logo -->
             <a href="{{ route('teacher.dashboard') }}" class="flex items-center gap-2">
                 <img src="{{ asset('assets/ioepc_logo.png') }}" class="h-12 w-auto" alt="Logo">
-                <span class="text-lg md:text-xl font-bold text-blue-900">IOEPC</span>
+                <span class="text-lg md:text-xl sm:text-2xl font-bold text-blue-900">IOEPC</span>
             </a>
 
             <!-- Teacher Profile -->
@@ -68,12 +68,12 @@
 
                     <!-- Avatar -->
                     <div
-                        class="w-9 h-9 rounded-full bg-blue-700 text-white flex items-center justify-center text-lg font-semibold">
+                        class="w-9 h-9 rounded-full bg-blue-700 text-white flex items-center justify-center sm:text-2xl text-lg font-semibold">
                         {{ strtoupper(mb_substr($teacher->name ?? 'T', 0, 1)) }}
                     </div>
 
                     <!-- Name -->
-                    <span class="hidden sm:inline-block font-medium">
+                    <span class="hidden sm:text-2xl sm:inline-block font-medium">
                         {{ $teacher->name ?? 'Teacher' }}
                     </span>
 
@@ -154,199 +154,200 @@
                 {{ session('error') }}
             </div>
         @endif
+{{-- ================================
+    SECTION 1: WEEKLY TEACHING ROUTINE
+   ================================ --}}
+<div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
 
-        {{-- =================================
-        SECTION 1: WEEKLY TEACHING ROUTINE
-       ================================== --}}
-        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-            <div class="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-slate-100">
-                <h2 class="text-sm sm:text-base font-semibold text-slate-800">
-                    Weekly Teaching Routine
-                </h2>
-                <p class="text-[11px] sm:text-[10px] text-slate-500 mt-0.5">
-                    All classes assigned to you for the week, grouped by day and period.
-                </p>
-            </div>
+    <!-- Header -->
+    <div class="px-3 py-2.5 border-b border-slate-100">
+        <h2 class="text-base font-semibold text-slate-800">
+            Weekly Teaching Routine
+        </h2>
+        <p class="text-[12px] text-slate-500 leading-tight">
+            All classes assigned for the week, grouped by day & period.
+        </p>
+    </div>
 
-            @if ($gridPeriods->isEmpty())
-                <div class="px-3 sm:px-4 py-4 text-[12px] sm:text-[11px] text-slate-500">
-                    No routine entries found for you.
-                </div>
-            @else
-                <div class="t-sticky-wrap px-2 sm:px-3 py-3">
-                    <table class="t-grid-table text-[11px] sm:text-[10px] bg-white">
-                        <thead>
-                            <tr class="bg-slate-50 text-slate-700">
-                                <th class="t-col-day px-2 py-2 text-left font-semibold min-w-[72px] sm:min-w-[80px]">
-                                    Days
-                                </th>
-                                @foreach ($gridPeriods as $p)
-                                    <th
-                                        class="px-2 sm:px-3 py-2 text-center font-semibold min-w-[130px] sm:min-w-[140px]">
-                                        <div>{{ $p->order }}</div>
-                                        <div class="mt-0.5 text-[10px] sm:text-[9px] text-slate-600 whitespace-nowrap">
-                                            {{ Carbon::parse($p->start_time)->format('g:i A') }}
-                                            –
-                                            {{ Carbon::parse($p->end_time)->format('g:i A') }}
-                                        </div>
-                                    </th>
-                                @endforeach
-                            </tr>
-                        </thead>
-                        <tbody>
+    @if ($gridPeriods->isEmpty())
+        <div class="px-4 py-4 text-sm text-slate-500">
+            No routine entries found for you.
+        </div>
+    @else
+
+        <!-- SCROLLABLE WRAPPER -->
+        <div class="overflow-x-auto overflow-y-hidden">
+            <table class="min-w-max text-[12px] whitespace-normal break-words border-collapse">
+
+                <!-- HEADER -->
+                <thead>
+                    <tr class="bg-slate-50 text-slate-700">
+                        <th class="sticky left-0 z-20 bg-slate-50 px-2 py-2 text-left
+                                   font-semibold border-r border-slate-200 min-w-[70px] whitespace-nowrap">
+                            Days
+                        </th>
+
+                        @foreach ($gridPeriods as $p)
+                            <th class="px-3 py-2 text-center font-semibold min-w-[120px] border-r border-slate-200">
+                                <div>{{ $p->order }}</div>
+                                <div class="text-[11px] text-slate-600">
+                                    {{ Carbon::parse($p->start_time)->format('g:i A') }} –
+                                    {{ Carbon::parse($p->end_time)->format('g:i A') }}
+                                </div>
+                            </th>
+                        @endforeach
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @php
+                        $periodCount = $gridPeriods->count();
+                        $periodArray = $gridPeriods->values();
+                    @endphp
+
+                    @foreach ($dayLabels as $dayKey => $label)
+                        @php
+                            $segments = [];
+                            $dayRoutines = $weeklyRoutines[$dayKey] ?? collect();
+
+                            foreach ($gridPeriods as $idx => $p) {
+                                $slot = $dayRoutines->where('period_id', $p->id)->values();
+
+                                foreach ($slot as $r) {
+
+                                    $segKey = implode('|', [
+                                        $r->subject_id,
+                                        $teacher->id,
+                                        $r->group,
+                                        $r->type,
+                                        $r->room_id,
+                                        $r->faculty_id,
+                                        $r->section_id,
+                                        $r->semester,
+                                    ]);
+
+                                    $extended = false;
+                                    foreach ($segments as &$sg) {
+                                        if ($sg['key'] === $segKey && $sg['end'] === $idx - 1) {
+                                            $sg['end'] = $idx;
+                                            $extended = true;
+                                            break;
+                                        }
+                                    }
+                                    unset($sg);
+
+                                    if (!$extended) {
+                                        $segments[] = [
+                                            'key' => $segKey,
+                                            'start' => $idx,
+                                            'end' => $idx,
+                                            'routine' => $r,
+                                        ];
+                                    }
+                                }
+                            }
+
+                            usort($segments, fn($a, $b) => $a['start'] <=> $b['start']);
+
+                            $lanes = [];
+                            foreach ($segments as $seg) {
+                                $placed = false;
+                                foreach ($lanes as &$lane) {
+                                    $last = end($lane);
+                                    if ($last['end'] < $seg['start']) {
+                                        $lane[] = $seg;
+                                        $placed = true;
+                                        break;
+                                    }
+                                }
+                                unset($lane);
+                                if (!$placed) {
+                                    $lanes[] = [$seg];
+                                }
+                            }
+                            if (empty($lanes)) {
+                                $lanes = [[]];
+                            }
+                        @endphp
+
+                        @foreach ($lanes as $laneIndex => $lane)
                             @php
-                                $periodCount = $gridPeriods->count();
-                                $periodArray = $gridPeriods->values();
+                                $startMap = [];
+                                foreach ($lane as $seg) {
+                                    $startMap[$seg['start']] = $seg;
+                                }
                             @endphp
 
-                            @foreach ($dayLabels as $dayKey => $label)
-                                @php
-                                    $segments = [];
-                                    $dayRoutines = $weeklyRoutines[$dayKey] ?? collect();
+                            <tr class="border-b border-slate-200">
 
-                                    foreach ($gridPeriods as $idx => $p) {
-                                        $slot = $dayRoutines->where('period_id', $p->id)->values();
+                                <!-- Sticky day column -->
+                                @if ($laneIndex === 0)
+                                    <td class="sticky left-0 z-10 bg-white border-r border-slate-200 px-2 py-2 
+                                               font-semibold text-slate-800 align-top min-w-[70px]">
+                                        <span class="hidden sm:inline">{{ $label }}</span>
+                                        <span class="sm:hidden">{{ substr($label, 0, 3) }}</span>
+                                    </td>
+                                @endif
 
-                                        foreach ($slot as $r) {
-                                            $teacherKey = $teacher->id;
-                                            $segKey = implode('|', [
-                                                $r->subject_id ?? 0,
-                                                $teacherKey,
-                                                $r->group ?? '',
-                                                $r->type ?? '',
-                                                $r->room_id ?? 0,
-                                                $r->faculty_id ?? 0,
-                                                $r->section_id ?? 0,
-                                                $r->semester ?? 0,
-                                            ]);
+                                @php $i = 0; @endphp
+                                @while ($i < $periodCount)
+                                    @php $seg = $startMap[$i] ?? null; @endphp
 
-                                            $extended = false;
-                                            foreach ($segments as &$sg) {
-                                                if ($sg['key'] === $segKey && $sg['end'] === $idx - 1) {
-                                                    $sg['end'] = $idx;
-                                                    $extended = true;
-                                                    break;
-                                                }
-                                            }
-                                            unset($sg);
+                                    @if ($seg)
+                                        @php
+                                            $span = $seg['end'] - $seg['start'] + 1;
+                                            $cell = $seg['routine'];
+                                            $startPeriod = $periodArray[$seg['start']] ?? null;
+                                            $endPeriod = $periodArray[$seg['end']] ?? null;
+                                        @endphp
 
-                                            if (!$extended) {
-                                                $segments[] = [
-                                                    'key' => $segKey,
-                                                    'start' => $idx,
-                                                    'end' => $idx,
-                                                    'routine' => $r,
-                                                ];
-                                            }
-                                        }
-                                    }
+                                        <td colspan="{{ $span }}" class="px-2 py-2 align-top border-r border-slate-200">
+                                            <div class="text-[12px] font-semibold text-slate-900 leading-tight">
+                                                {{ $cell->subject->code ?? '' }} —
+                                                {{ $cell->subject->name ?? '' }}
+                                            </div>
 
-                                    usort($segments, fn($a, $b) => $a['start'] <=> $b['start']);
+                                            <div class="text-[11px] text-slate-600 leading-snug">
+                                                {{ $cell->faculty->code ?? '' }}
+                                                @if ($cell->faculty?->name)
+                                                    — {{ $cell->faculty->name }}
+                                                @endif
+                                            </div>
 
-                                    $lanes = [];
-                                    foreach ($segments as $seg) {
-                                        $placed = false;
-                                        foreach ($lanes as &$lane) {
-                                            $last = end($lane);
-                                            if ($last['end'] < $seg['start']) {
-                                                $lane[] = $seg;
-                                                $placed = true;
-                                                break;
-                                            }
-                                        }
-                                        unset($lane);
-                                        if (!$placed) {
-                                            $lanes[] = [$seg];
-                                        }
-                                    }
-                                    if (empty($lanes)) {
-                                        $lanes = [[]];
-                                    }
-                                    $laneCount = count($lanes);
-                                @endphp
+                                            <div class="text-[11px] text-slate-600 leading-snug">
+                                                Sec {{ $cell->section->name ?? '-' }}
+                                                · Sem {{ $cell->semester ?? '-' }}
+                                            </div>
 
-                                @for ($laneIndex = 0; $laneIndex < $laneCount; $laneIndex++)
-                                    @php
-                                        $lane = $lanes[$laneIndex];
-                                        $startMap = [];
-                                        foreach ($lane as $seg) {
-                                            $startMap[$seg['start']] = $seg;
-                                        }
-                                    @endphp
+                                            <div class="text-[11px] text-slate-600 leading-snug">
+                                                {{ Carbon::parse($startPeriod->start_time)->format('g:i A') }} –
+                                                {{ Carbon::parse($endPeriod->end_time)->format('g:i A') }}
+                                                @if ($cell->room) · Rm {{ $cell->room->room_no }} @endif
+                                            </div>
+                                        </td>
 
-                                    <tr>
-                                        @if ($laneIndex === 0)
-                                            <td class="t-col-day px-2 py-2 font-semibold text-slate-800 align-top"
-                                                rowspan="{{ $laneCount }}">
-                                                <span class="hidden sm:inline">{{ $label }}</span>
-                                                <span class="sm:hidden">{{ substr($label, 0, 3) }}</span>
-                                            </td>
-                                        @endif
+                                        @php $i += $span; @endphp
 
-                                        @php $i = 0; @endphp
-                                        @while ($i < $periodCount)
-                                            @php $seg = $startMap[$i] ?? null; @endphp
-
-                                            @if ($seg)
-                                                @php
-                                                    $span = $seg['end'] - $seg['start'] + 1;
-                                                    $cell = $seg['routine'];
-
-                                                    $startPeriod = $periodArray[$seg['start']] ?? null;
-                                                    $endPeriod = $periodArray[$seg['end']] ?? null;
-
-                                                    $startLabel = $startPeriod
-                                                        ? Carbon::parse($startPeriod->start_time)->format('g:i A')
-                                                        : '';
-                                                    $endLabel = $endPeriod
-                                                        ? Carbon::parse($endPeriod->end_time)->format('g:i A')
-                                                        : '';
-                                                @endphp
-                                                <td colspan="{{ $span }}"
-                                                    class="px-2 sm:px-3 py-1.5 align-top">
-                                                    <div
-                                                        class="text-[11px] sm:text-[10px] font-semibold text-slate-900">
-                                                        {{ $cell->subject->code ?? '' }}
-                                                        @if (!empty($cell->subject->code))
-                                                            ·
-                                                        @endif
-                                                        {{ $cell->subject->name ?? '' }}
-                                                    </div>
-                                                    <div class="mt-0.5 text-[10px] sm:text-[9px] text-slate-600">
-                                                        {{ $cell->faculty->code ?? '' }}
-                                                        @if ($cell->faculty?->name)
-                                                            – {{ $cell->faculty->name }}
-                                                        @endif
-                                                        · Sec {{ $cell->section->name ?? '-' }}
-                                                        · Sem {{ $cell->semester ?? '-' }}
-                                                    </div>
-                                                    <div class="mt-0.5 text-[10px] sm:text-[9px] text-slate-500">
-                                                        {{ $startLabel }} – {{ $endLabel }}
-                                                        @if ($cell->room)
-                                                            · Rm {{ $cell->room->room_no }}
-                                                        @endif
-                                                    </div>
-                                                </td>
-                                                @php $i += $span; @endphp
-                                            @else
-                                                <td class="px-2 py-3">
-                                                    {{-- empty --}}
-                                                </td>
-                                                @php $i++; @endphp
-                                            @endif
-                                        @endwhile
-                                    </tr>
-                                @endfor
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="sm:hidden px-3 py-2 text-center text-[11px] text-slate-500 border-t border-slate-100">
-                    ← Swipe to view full weekly routine →
-                </div>
-            @endif
+                                    @else
+                                        <td class="px-2 py-2 border-r border-slate-200"></td>
+                                        @php $i++; @endphp
+                                    @endif
+                                @endwhile
+                            </tr>
+                        @endforeach
+                    @endforeach
+                </tbody>
+            </table>
         </div>
+
+        <!-- Mobile hint -->
+        <div class="sm:hidden px-3 py-2 text-center text-[11px] text-slate-500 border-t border-slate-100">
+            ← Swipe to view full weekly routine →
+        </div>
+
+    @endif
+</div>
+
 
         {{-- =====================================
         SECTION 2: TODAY + MERGED ATTENDANCE
@@ -355,8 +356,8 @@
         {{-- SUMMARY CARDS --}}
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div class="rounded-2xl bg-white border border-slate-200 p-3 shadow-sm">
-                <div class="text-[11px] sm:text-[10px] text-slate-500">Today's Classes</div>
-                <div class="mt-1 text-xl sm:text-2xl font-bold text-slate-900">
+                <div class="text-[11px] sm:text-xl text-slate-500">Today's Classes</div>
+                <div class="mt-1 text-xl sm:text-xl font-bold text-slate-900">
                     {{ count($mergedToday) }}
                 </div>
             </div>
@@ -381,14 +382,14 @@
                 }
             @endphp
             <div class="rounded-2xl bg-white border border-slate-200 p-3 shadow-sm">
-                <div class="text-[11px] sm:text-[10px] text-slate-500">Attendance Completed</div>
-                <div class="mt-1 text-xl sm:text-2xl font-bold text-emerald-700">
+                <div class="text-[11px]  sm:text-xl text-slate-500">Attendance Completed</div>
+                <div class="mt-1 text-xl sm:text-xl font-bold text-emerald-700">
                     {{ $completed }}
                 </div>
             </div>
             <div class="rounded-2xl bg-white border border-slate-200 p-3 shadow-sm">
-                <div class="text-[11px] sm:text-[10px] text-slate-500">Pending</div>
-                <div class="mt-1 text-xl sm:text-2xl font-bold text-rose-600">
+                <div class="text-[11px]  sm:text-xl text-slate-500">Pending</div>
+                <div class="mt-1 text-xl sm:text-xl font-bold text-rose-600">
                     {{ $pending }}
                 </div>
             </div>
@@ -397,16 +398,16 @@
         {{-- TODAY'S MERGED SCHEDULE --}}
         <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
             <div class="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-slate-100 flex items-center justify-between">
-                <h2 class="text-sm sm:text-base font-semibold text-slate-800">
+                <h2 class="text-sm  sm:text-l font-semibold text-slate-800">
                     Today's Teaching Schedule
                 </h2>
-                <p class="hidden sm:block text-[10px] text-slate-500">
+                <p class="hidden sm:block text-[10px]  sm:text-xl text-green-500">
                     Click "Take Attendance" to open the student list below.
                 </p>
             </div>
 
             <div class="overflow-x-auto">
-                <table class="min-w-full text-[11px] sm:text-[10px]">
+                <table class="min-w-full text-[11px]  sm:text-[15px]">
                     <thead class="bg-slate-50 text-slate-700">
                         <tr>
                             <th class="px-3 py-2 text-left font-semibold">Time</th>
@@ -436,34 +437,34 @@
                             @endphp
                             <tr class="@if ($selectedGroup && $selectedGroup['key'] === $block['key']) t-merged-selected @endif">
                                 <td class="px-3 py-2 align-middle whitespace-nowrap">
-                                    <div class="font-semibold text-slate-800 text-[12px] sm:text-[11px]">
+                                    <div class="font-semibold text-slate-800 text-[12px] sm:text-[16px]">
                                         {{ $startLabel }} – {{ $endLabel }}
                                     </div>
                                 </td>
                                 <td class="px-3 py-2 align-middle">
-                                    <div class="font-semibold text-slate-800 text-[12px] sm:text-[11px]">
+                                    <div class="font-semibold text-slate-800 text-[12px] sm:text-[16px]">
                                         {{ $r->faculty->code ?? '' }}
                                     </div>
-                                    <div class="text-[11px] sm:text-[10px] text-slate-500">
+                                    <div class="text-[11px] sm:text-[15px] text-slate-500">
                                         {{ $r->faculty->name ?? '' }} ·
                                         Sec {{ $r->section->name ?? '-' }} ·
                                         Sem {{ $r->semester ?? '-' }}
                                     </div>
                                 </td>
                                 <td class="px-3 py-2 align-middle">
-                                    <div class="font-semibold text-slate-800 text-[12px] sm:text-[11px]">
+                                    <div class="font-semibold text-slate-800 text-[15px] sm:text-[16px]">
                                         {{ $r->subject->code ?? '' }}
                                     </div>
-                                    <div class="text-[11px] sm:text-[10px] text-slate-500">
+                                    <div class="text-[11px] sm:text-[15px] text-slate-500">
                                         {{ $r->subject->name ?? '' }}
                                     </div>
                                     @if ($r->type)
-                                        <div class="text-[10px] sm:text-[9px] text-slate-500">
+                                        <div class="text-[10px] sm:text-[13px] text-slate-500">
                                             {{ $r->type === 'Practical' ? '(Practical)' : '(Theory)' }}
                                         </div>
                                     @endif
                                 </td>
-                                <td class="px-3 py-2 align-middle text-slate-700">
+                                <td class="px-3 py-2 align-middle sm:text-[15px] text-slate-700">
                                     {{ $r->room->room_no ?? '-' }}
                                 </td>
                                 <td class="px-3 py-2 align-middle text-center">
@@ -483,10 +484,10 @@
                                     <form method="GET" action="{{ route('teacher.dashboard') }}">
                                         <input type="hidden" name="merged" value="{{ $block['key'] }}">
                                         <button
-                                            class="px-3 py-1 rounded-lg text-[11px] sm:text-[10px] font-semibold border
+                                            class="px-3 py-1 rounded-lg text-[11px] sm:text-xl font-semibold border
                                            @if ($selectedGroup && $selectedGroup['key'] === $block['key']) bg-emerald-600 text-white border-emerald-600
                                            @else
-                                               bg-slate-50 text-slate-800 border-slate-200 hover:bg-slate-100 @endif">
+                                               bg-slate-300 text-slate-800 border-slate-200 hover:bg-slate-100 @endif">
                                             Take Attendance
                                         </button>
                                     </form>
@@ -517,7 +518,7 @@
             <div class="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
                 <div class="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-slate-100 flex items-center justify-between">
                     <div>
-                        <h2 class="text-sm sm:text-base font-semibold text-slate-800">
+                        <h2 class="text-sm sm:text-2xlfont-semibold text-slate-800">
                             Attendance – {{ $sample->faculty->code ?? '' }}
                             / Sec {{ $sample->section->name ?? '-' }}
                             / Sem {{ $sample->semester ?? '-' }}
@@ -545,24 +546,24 @@
                     @endforeach
                     <div class="flex gap-2 px-3 sm:px-4 py-3 border-b border-slate-100">
                         <button type="button" id="markAllPresent"
-                            class="px-3 py-1.5 bg-emerald-600 text-white text-xs font-semibold rounded-lg hover:bg-emerald-700">
+                            class="px-3 py-1.5 bg-emerald-600 text-white text-xs sm:text-xl font-semibold rounded-lg hover:bg-emerald-700">
                             Mark All Present
                         </button>
 
                         <button type="button" id="markAllAbsent"
-                            class="px-3 py-1.5 bg-rose-600 text-white text-xs font-semibold rounded-lg hover:bg-rose-700">
+                            class="px-3 py-1.5 bg-rose-600 text-white text-xs sm:text-xl font-semibold rounded-lg hover:bg-rose-700">
                             Mark All Absent
                         </button>
 
                         <button type="button" id="clearAll"
-                            class="px-3 py-1.5 bg-slate-500 text-white text-xs font-semibold rounded-lg hover:bg-slate-600">
+                            class="px-3 py-1.5 bg-slate-500 text-white text-xs sm:text-xl font-semibold rounded-lg hover:bg-slate-600">
                             Clear All
                         </button>
                     </div>
 
-                    <div class="t-attendance-wrap">
-                        <table class="min-w-full text-[11px] sm:text-[10px]">
-                            <thead class="bg-slate-50 text-slate-700">
+                    <div class="t-attendance-wrap mt-3 px-3 sm:px-4 py-3">
+                        <table class="min-w-full text-[11px] sm:text-2xl">
+                            <thead class="bg-red-50 text-slate-700">
                                 <tr>
                                     <th class="px-3 py-2 text-left font-semibold">Roll</th>
                                     <th class="px-3 py-2 text-left font-semibold">Name</th>
@@ -576,25 +577,25 @@
                                     @endphp
                                     <tr>
                                         <td
-                                            class="px-3 py-2 align-middle font-semibold text-slate-800 whitespace-nowrap text-[12px] sm:text-[11px]">
+                                            class="px-3 py-2 align-middle font-semibold text-slate-800 whitespace-nowrap text-[12px] sm:text-xl">
                                             {{ $s->symbol_no }}
                                         </td>
-                                        <td class="px-3 py-2 align-middle text-slate-800 text-[12px] sm:text-[11px]">
+                                        <td class="px-3 py-2 align-middle text-slate-800 text-[12px] sm:text-xl">
                                             {{ $s->name }}
                                         </td>
                                         <td class="px-3 py-2 align-middle text-center">
                                             <div class="inline-flex items-center gap-4">
                                                 <label
-                                                    class="inline-flex items-center gap-1 text-[11px] sm:text-[10px] cursor-pointer">
+                                                    class="inline-flex items-center gap-1 text-[11px] sm:text-xl cursor-pointer">
                                                     <input type="radio" name="attendance[{{ $s->id }}]"
-                                                        value="P" class="h-3 w-3 cursor-pointer"
+                                                        value="P" class="h-6 w-6 cursor-pointer"
                                                         @checked($current === 'P')>
                                                     <span>Present</span>
                                                 </label>
                                                 <label
-                                                    class="inline-flex items-center gap-1 text-[11px] sm:text-[10px] cursor-pointer">
+                                                    class="inline-flex items-center gap-1 text-[11px] sm:text-xl cursor-pointer">
                                                     <input type="radio" name="attendance[{{ $s->id }}]"
-                                                        value="A" class="h-3 w-3 cursor-pointer"
+                                                        value="A" class="h-6 w-6 cursor-pointer"
                                                         @checked($current === 'A')>
                                                     <span>Absent</span>
                                                 </label>
@@ -608,11 +609,11 @@
 
                     <div
                         class="px-3 sm:px-4 py-2.5 sm:py-3 border-t border-slate-100 flex items-center justify-between">
-                        <p class="text-[10px] sm:text-[9px] text-slate-500">
+                        <p class="text-[10px] sm:text-xl text-red-500">
                             Once saved, attendance cannot be changed without admin permission.
                         </p>
                         <button type="submit"
-                            class="inline-flex items-center px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 transition-colors">
+                            class="inline-flex items-center px-4 py-2 rounded-xl bg-slate-900 text-white sm:text-4xl font-semibold hover:bg-slate-800 transition-colors">
                             Save Attendance
                         </button>
                     </div>

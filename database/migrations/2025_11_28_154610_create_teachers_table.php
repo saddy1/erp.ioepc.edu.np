@@ -14,6 +14,7 @@ return new class extends Migration
             $table->id();
             $table->string('code', 20)->unique();      // e.g. T001
             $table->string('name');
+            $table->string('nick_name')->nullable();
             $table->string('email')->nullable()->unique();
             $table->string('phone', 20)->nullable();
 

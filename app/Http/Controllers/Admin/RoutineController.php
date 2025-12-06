@@ -366,7 +366,7 @@ class RoutineController extends Controller
             'start_period_id' => ['required', 'exists:periods,id'],
             'end_period_id'   => ['required', 'exists:periods,id'],
 
-            'group'      => ['required', Rule::in(['ALL', 'A', 'B'])],
+            'group'      => ['required', Rule::in(['ALL', 'A', 'B','C','D','E','F','A/B','B/A','C/D','D/C','E/F','F/E'])],
             'type'       => ['required', Rule::in(['TH', 'PR'])],
 
             'subject_id' => ['required', 'exists:subjects,id'],
@@ -389,7 +389,7 @@ class RoutineController extends Controller
             'period_id'  => ['required', 'exists:periods,id'],
             'day_of_week' => ['required', Rule::in(['sun', 'mon', 'tue', 'wed', 'thu', 'fri'])],
 
-            'group'      => ['required', Rule::in(['ALL', 'A', 'B'])],
+            'group'      => ['required', Rule::in(['ALL', 'A', 'B','C','D','E','F','A/B','B/A','C/D','D/C','E/F','F/E'])],
             'type'       => ['required', Rule::in(['TH', 'PR'])],
 
             'subject_id' => ['required', 'exists:subjects,id'],

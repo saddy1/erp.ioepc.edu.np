@@ -13,6 +13,7 @@ class Teacher extends Model
     protected $fillable = [
         'code',
         'name',
+        'nick_name',
         'email',
         'phone',
         'faculty_id',
@@ -47,4 +48,30 @@ class Teacher extends Model
             $this->attributes['password'] = $value;
         }
     }
+    public static function boot()
+{
+    parent::boot();
+
+    static::creating(function ($teacher) {
+        $teacher->nick_name = self::makeNick($teacher->name);
+    });
+
+    static::updating(function ($teacher) {
+        if ($teacher->isDirty('name') || empty($teacher->nick_name)) {
+            $teacher->nick_name = self::makeNick($teacher->name);
+        }
+    });
+}
+
+public static function makeNick($name)
+{
+    if (!$name) return null;
+
+    $parts = preg_split('/\s+/', trim($name));
+
+    $letters = array_map(fn($p) => strtoupper($p[0] ?? ''), $parts);
+
+    return implode('', $letters); // e.g. SKP
+}
+
 }

@@ -87,7 +87,7 @@
             <nav class="py-4">
                 <ul class="space-y-1 px-3 text-sm">
                     <li>
-                        <a href="{{ route('admin.dashboard') }}"
+                        <a href="{{ route('admin.analytics.attendance.index') }}"
                             class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800">
                             <i class="fas fa-tachometer-alt w-5 text-gray-300"></i>
                             <span>Dashboard</span>

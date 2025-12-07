@@ -87,7 +87,7 @@ class Routine extends Model
 
 public function classFeedbacks()
 {
-    return $this->hasMany(ClassFeedback::class);
+    return $this->hasMany(RoutineFeedback::class);
 }
 
 }

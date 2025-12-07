@@ -18,6 +18,9 @@ use App\Http\Controllers\Student\StudentDashboardController;
 use App\Http\Controllers\Admin\CrRoleController;
 use Illuminate\Support\Facades\Auth;
 
+use function Symfony\Component\String\u;
+
+use App\Http\Controllers\Admin\AttendanceAnalyticsController;
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -63,7 +66,7 @@ Route::post('/login/teacher', [AuthController::class, 'teacherLogin'])->name('te
 Route::group(['middleware' => 'student.auth'], function () {
     Route::get('/dashboard/student', [StudentDashboardController::class, 'index'])
         ->name('student.dashboard');
-    
+
     Route::get('/student/routine', [StudentDashboardController::class, 'routine'])
         ->name('student.routine');
 
@@ -74,14 +77,13 @@ Route::group(['middleware' => 'student.auth'], function () {
     // This MUST come before the {routine} route
     Route::post('/student/routine-feedback/bulk', [StudentDashboardController::class, 'bulkUpdate'])
         ->name('student.routine-feedback.bulk');
-    
+
     // This MUST come after the /bulk route
     Route::post('/student/routine-feedback/{routine}', [StudentDashboardController::class, 'storeFeedback'])
         ->name('student.routine-feedback.store');
 
-        Route::post('/logout/student', [AuthController::class, 'logoutStudent'])
-    ->name('student.logout');
-
+    Route::post('/logout/student', [AuthController::class, 'logoutStudent'])
+        ->name('student.logout');
 });
 
 Route::group(['middleware' => 'teacher.auth'], function () {
@@ -97,15 +99,14 @@ Route::group(['middleware' => 'teacher.auth'], function () {
         ->name('teacher.attendance.store');
 
 
-        Route::post('/teacher/update-password', [AuthController::class, 'forcePasswordUpdate'])
-     ->name('teacher.force.password.update');
+    Route::post('/teacher/update-password', [AuthController::class, 'forcePasswordUpdate'])
+        ->name('teacher.force.password.update');
 
     Route::post('/logout/teacher', [AuthController::class, 'logoutTeacher'])
         ->name('teacher.logout');
 });
 
 Route::group(['middleware' => 'admin.auth'], function () {
-    Route::get('/dashboard/admin', [DashboardController::class, 'admin'])->name('admin.dashboard');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
     Route::prefix('admin')->group(function () {
@@ -144,6 +145,29 @@ Route::group(['middleware' => 'admin.auth'], function () {
         Route::post('cr-roles', [CrRoleController::class, 'save'])
             ->name('admin.cr_roles.save');
     });
+
+
+
+Route::prefix('admin/analytics/attendance')
+    ->name('admin.analytics.attendance.')
+    ->group(function () {
+        Route::get('/',        [AttendanceAnalyticsController::class, 'index'])->name('index');
+        Route::get('/data',    [AttendanceAnalyticsController::class, 'data'])->name('data');
+        Route::get('/export',  [AttendanceAnalyticsController::class, 'export'])->name('export');
+
+        // dependent dropdown endpoints
+        Route::get('/sections', [AttendanceAnalyticsController::class, 'sections'])->name('sections');
+        Route::get('/subjects', [AttendanceAnalyticsController::class, 'subjects'])->name('subjects');
+        Route::get('/students', [AttendanceAnalyticsController::class, 'students'])->name('students');
+    });
+
+
+
+
+
+
+
+
 
 
     // NEW: Student import (master students)

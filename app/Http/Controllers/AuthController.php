@@ -32,7 +32,7 @@ class AuthController extends Controller
     public function showAdminLogin()
     {
         if (session()->has('admin_id')) {
-            return redirect()->route('admin.dashboard');
+            return redirect()->route('admin.analytics.attendance.index');
         }
         return view('Backend.index');
     }
@@ -53,7 +53,7 @@ class AuthController extends Controller
 
 
         session(['admin_id' => $admin->id]);
-        return redirect()->route('admin.dashboard');
+        return redirect()->route('admin.analytics.attendance.index');
     }
 
 

@@ -510,6 +510,13 @@
                                     <div class="text-[11px] sm:text-[10px] text-slate-500">
                                         {{ $r->subject->name ?? '' }}
                                     </div>
+                                    <div class="mt-0.5">
+                                        <span
+                                            class="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-800 border border-slate-200">
+                                            <i class="fa-solid fa-users text-[8px]"></i>
+                                            Group: {{ $r->group ?? 'N/A' }}
+                                        </span>
+                                    </div>
                                     @if ($r->type)
                                         <div class="text-[10px] sm:text-[9px] text-slate-500">
                                             {{ $r->type === 'Practical' ? '(Practical)' : '(Theory)' }}

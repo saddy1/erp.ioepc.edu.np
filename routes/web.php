@@ -159,6 +159,9 @@ Route::prefix('admin/analytics/attendance')
         Route::get('/sections', [AttendanceAnalyticsController::class, 'sections'])->name('sections');
         Route::get('/subjects', [AttendanceAnalyticsController::class, 'subjects'])->name('subjects');
         Route::get('/students', [AttendanceAnalyticsController::class, 'students'])->name('students');
+        Route::get('analytics/attendance/teachers', [AttendanceAnalyticsController::class, 'teachers'])
+    ->name('teachers');
+
     });
 
 

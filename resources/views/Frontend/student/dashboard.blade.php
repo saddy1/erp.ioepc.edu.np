@@ -208,13 +208,43 @@ thead .col-sem {
     @endif
 
  
-    {{-- Password Change Notice --}}
-    @if($student->must_change_password)
-        <div class="mb-3 sm:mb-4 rounded-lg sm:rounded-xl border border-amber-200 bg-amber-50 px-3 sm:px-4 py-2 sm:py-3 text-[10px] sm:text-[11px] text-amber-900">
-            <span class="font-semibold">Security notice:</span>
-            You have been assigned a new password by campus. Please go to the password change page and set your own password.
-        </div>
-    @endif
+  @if($student->must_change_password)
+<div id="passwordModal"
+     class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
+
+    <div class="bg-white w-full max-w-md mx-4 p-6 rounded-2xl shadow-lg border border-slate-200 animate-fadeIn">
+
+        <h2 class="text-2xl font-bold text-center mb-2 text-blue-900">
+            Change Your Password
+        </h2>
+        <p class="text-center text-sm text-slate-600 mb-4">
+            For security reasons, you must set a new password before continuing.
+        </p>
+
+        <form method="POST" action="{{ route('student.force.password.update') }}">
+            @csrf
+
+            <label class="block text-sm font-medium mb-1">New Password</label>
+            <input type="password" name="password" required
+                   class="w-full border rounded-lg p-2 mb-3">
+
+            <label class="block text-sm font-medium mb-1">Confirm Password</label>
+            <input type="password" name="password_confirmation" required
+                   class="w-full border rounded-lg p-2 mb-4">
+
+            <button type="submit"
+                class="w-full bg-blue-700 text-white py-2 rounded-lg font-semibold hover:bg-blue-800">
+                Update Password
+            </button>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.body.classList.add("overflow-hidden");
+</script>
+@endif
+
 
     {{-- Student Info Cards --}}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">

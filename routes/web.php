@@ -52,13 +52,6 @@ Route::get('/login/admin', [AuthController::class, 'showAdminLogin'])->name('adm
 Route::post('/login/admin', [AuthController::class, 'adminLogin'])->name('admin.login');
 
 
-// STUDENT AUTH
-Route::get('/login/student', [AuthController::class, 'showStudentLogin'])->name('student.login.form');
-Route::post('/login/student', [AuthController::class, 'studentLogin'])->name('student.login');
-
-// TEACHER AUTH
-Route::get('/login/teacher', [AuthController::class, 'showTeacherLogin'])->name('teacher.login.form');
-Route::post('/login/teacher', [AuthController::class, 'teacherLogin'])->name('teacher.login');
 
 
 
@@ -82,9 +75,29 @@ Route::group(['middleware' => 'student.auth'], function () {
     Route::post('/student/routine-feedback/{routine}', [StudentDashboardController::class, 'storeFeedback'])
         ->name('student.routine-feedback.store');
 
+
+    // Student forced password update
+    Route::post(
+        '/student/force-password-update',
+        [AuthController::class, 'forceStudentPasswordUpdate']
+    )->name('student.force.password.update');
+
     Route::post('/logout/student', [AuthController::class, 'logoutStudent'])
         ->name('student.logout');
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 Route::group(['middleware' => 'teacher.auth'], function () {
     Route::get('/dashboard/teacher', [TeacherDashboardController::class, 'index'])
@@ -99,7 +112,7 @@ Route::group(['middleware' => 'teacher.auth'], function () {
         ->name('teacher.attendance.store');
 
 
-    Route::post('/teacher/update-password', [AuthController::class, 'forcePasswordUpdate'])
+    Route::post('/teacher/update-password', [AuthController::class, 'forceTeacherPasswordUpdate'])
         ->name('teacher.force.password.update');
 
     Route::post('/logout/teacher', [AuthController::class, 'logoutTeacher'])
@@ -148,21 +161,20 @@ Route::group(['middleware' => 'admin.auth'], function () {
 
 
 
-Route::prefix('admin/analytics/attendance')
-    ->name('admin.analytics.attendance.')
-    ->group(function () {
-        Route::get('/',        [AttendanceAnalyticsController::class, 'index'])->name('index');
-        Route::get('/data',    [AttendanceAnalyticsController::class, 'data'])->name('data');
-        Route::get('/export',  [AttendanceAnalyticsController::class, 'export'])->name('export');
+    Route::prefix('admin/analytics/attendance')
+        ->name('admin.analytics.attendance.')
+        ->group(function () {
+            Route::get('/',        [AttendanceAnalyticsController::class, 'index'])->name('index');
+            Route::get('/data',    [AttendanceAnalyticsController::class, 'data'])->name('data');
+            Route::get('/export',  [AttendanceAnalyticsController::class, 'export'])->name('export');
 
-        // dependent dropdown endpoints
-        Route::get('/sections', [AttendanceAnalyticsController::class, 'sections'])->name('sections');
-        Route::get('/subjects', [AttendanceAnalyticsController::class, 'subjects'])->name('subjects');
-        Route::get('/students', [AttendanceAnalyticsController::class, 'students'])->name('students');
-        Route::get('analytics/attendance/teachers', [AttendanceAnalyticsController::class, 'teachers'])
-    ->name('teachers');
-
-    });
+            // dependent dropdown endpoints
+            Route::get('/sections', [AttendanceAnalyticsController::class, 'sections'])->name('sections');
+            Route::get('/subjects', [AttendanceAnalyticsController::class, 'subjects'])->name('subjects');
+            Route::get('/students', [AttendanceAnalyticsController::class, 'students'])->name('students');
+            Route::get('analytics/attendance/teachers', [AttendanceAnalyticsController::class, 'teachers'])
+                ->name('teachers');
+        });
 
 
 

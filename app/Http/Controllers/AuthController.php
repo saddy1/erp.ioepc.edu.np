@@ -80,6 +80,23 @@ class AuthController extends Controller
 
         return redirect()->route('student.dashboard');
     }
+public function forceStudentPasswordUpdate(Request $request)
+{
+    $request->validate([
+        'password' => 'required|min:6|confirmed',
+    ]);
+
+    $student = Student::findOrFail(session('student_id'));
+
+    $student->password = $request->password;
+    $student->must_change_password = false;
+    $student->save();
+
+     session()->forget(['teacher_id']);
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+    return redirect()->route('student.login.form')->with('success', 'Password updated. Please login again.');
+}
 
     // ========== TEACHER LOGIN ==========
     public function showTeacherLogin()
@@ -111,7 +128,7 @@ class AuthController extends Controller
         return redirect()->route('teacher.dashboard');
     }
 
-    public function forcePasswordUpdate(Request $request)
+    public function forceTeacherPasswordUpdate(Request $request)
     {
         $request->validate([
             'password' => 'required|min:6|confirmed',

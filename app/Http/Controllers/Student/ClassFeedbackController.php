@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
 use App\Models\ClassFeedback;
+use App\Models\RoutineFeedback;
 use App\Models\Routine;
 use App\Models\Student;
 use Illuminate\Http\Request;
@@ -44,7 +45,7 @@ class ClassFeedbackController extends Controller
             abort(403, 'Invalid routine for this student.');
         }
 
-        ClassFeedback::updateOrCreate(
+        RoutineFeedback::updateOrCreate(
             [
                 'routine_id' => $routine->id,
                 'student_id' => $student->id,

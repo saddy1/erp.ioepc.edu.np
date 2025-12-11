@@ -16,32 +16,34 @@ class AttendanceAnalyticsController extends Controller
     /* ==============================
        MAIN DASHBOARD PAGE
        ============================== */
-    public function index(Request $request)
-    {
-        $faculties = Faculty::orderBy('name')->get();
+  public function index(Request $request)
+{
+    $faculties = Faculty::orderBy('name')->get();
+    
+    // FETCH SECTIONS (Make sure Section model is imported at the top)
+    // We fetch all of them; the JavaScript will handle the filtering
+    $sections = Section::orderBy('name')->get(); 
 
-        // You can also load all teachers for the initial teacher dropdown if you want:
-        $teachers  = DB::table('teachers')
-            ->orderBy('name')
-            ->get();
+    $teachers  = DB::table('teachers')->orderBy('name')->get();
 
-        $mode  = $request->get('mode', 'daily');
-        $today = Carbon::today();
-        $from  = $request->get('from');
-        $to    = $request->get('to');
+    $mode  = $request->get('mode', 'daily');
+    $today = Carbon::today();
+    $from  = $request->get('from');
+    $to    = $request->get('to');
 
-        if (!$from || !$to) {
-            [$from, $to] = $this->defaultRange($mode, $today);
-        }
-
-        return view('Backend.dashboard.index', [
-            'faculties'   => $faculties,
-            'teachers'    => $teachers,
-            'defaultMode' => $mode,
-            'defaultFrom' => $from,
-            'defaultTo'   => $to,
-        ]);
+    if (!$from || !$to) {
+        [$from, $to] = $this->defaultRange($mode, $today);
     }
+
+    return view('Backend.dashboard.index', [
+        'faculties'   => $faculties,
+        'sections'    => $sections, // <--- Add this
+        'teachers'    => $teachers,
+        'defaultMode' => $mode,
+        'defaultFrom' => $from,
+        'defaultTo'   => $to,
+    ]);
+}
 
     /* ==============================
        JSON DATA FOR DASHBOARD
@@ -155,6 +157,17 @@ class AttendanceAnalyticsController extends Controller
                 $subjectId
             );
 
+            // ---------- Not taught details (for table) ----------
+            $notTaughtDetails = $this->getNotTaughtDetails(
+                $from,
+                $to,
+                $facultyId,
+                $teacherId,
+                $sectionId,
+                $semester,
+                $subjectId
+            );
+
             // ---------- Student timeline (if specific student selected) ----------
             $studentTimeline = [];
             if ($studentId) {
@@ -169,7 +182,7 @@ class AttendanceAnalyticsController extends Controller
                 );
             }
 
-            // ---------- Subject cross-contrast (present in one, absent in another) ----------
+            // ---------- Subject cross-contrast ----------
             $subjectContrast = $this->getSubjectContrast(
                 $from,
                 $to,
@@ -203,16 +216,17 @@ class AttendanceAnalyticsController extends Controller
                     'presentRate'    => $presentRate,
                     'absentRate'     => $absentRate,
                 ],
-                'trendByDate'     => $trendByDate,
-                'byFaculty'       => $byFaculty,
-                'byTeacher'       => $byTeacher,
-                'bySubject'       => $bySubject,
-                'bySection'       => $bySection,
-                'byStudent'       => $byStudent,
-                'taughtStats'     => $taughtStats,
-                'contradictions'  => $contradictions,
-                'studentTimeline' => $studentTimeline,
-                'subjectContrast' => $subjectContrast,
+                'trendByDate'      => $trendByDate,
+                'byFaculty'        => $byFaculty,
+                'byTeacher'        => $byTeacher,
+                'bySubject'        => $bySubject,
+                'bySection'        => $bySection,
+                'byStudent'        => $byStudent,
+                'taughtStats'      => $taughtStats,
+                'contradictions'   => $contradictions,
+                'studentTimeline'  => $studentTimeline,
+                'subjectContrast'  => $subjectContrast,
+                'notTaughtDetails' => $notTaughtDetails,
             ]);
 
         } catch (\Exception $e) {
@@ -571,6 +585,9 @@ class AttendanceAnalyticsController extends Controller
         ];
     }
 
+    /* ==============================
+       CONTRADICTIONS
+       ============================== */
     protected function findContradictions(
         $from,
         $to,
@@ -579,53 +596,207 @@ class AttendanceAnalyticsController extends Controller
         $semester,
         $subjectId
     ) {
+        // Common attendance aggregate: per routine + date
+        $attendanceAgg = DB::table('attendances')
+            ->selectRaw('routine_id, date, COUNT(*) as attendance_count')
+            ->whereBetween('date', [$from, $to])
+            ->groupBy('routine_id', 'date');
+
+        // 1) Rows where CR feedback exists
+        $q1 = DB::table('routine_feedback as rf')
+            ->join('routines as r', 'rf.routine_id', '=', 'r.id')
+            ->leftJoinSub($attendanceAgg, 'ac', function ($join) {
+                $join->on('ac.routine_id', '=', 'r.id')
+                     ->on('ac.date', '=', 'rf.class_date');
+            })
+            ->leftJoin('subjects', 'r.subject_id', '=', 'subjects.id')
+            ->leftJoin('teachers', 'r.teacher_id', '=', 'teachers.id')
+            ->leftJoin('sections', 'r.section_id', '=', 'sections.id')
+            ->leftJoin('faculties', 'r.faculty_id', '=', 'faculties.id')
+            ->whereBetween('rf.class_date', [$from, $to]);
+
+        if ($facultyId) $q1->where('r.faculty_id', $facultyId);
+        if ($sectionId) $q1->where('r.section_id', $sectionId);
+        if ($semester)  $q1->where('r.semester', $semester);
+        if ($subjectId) $q1->where('r.subject_id', $subjectId);
+
+        $q1 = $q1->selectRaw('
+            rf.routine_id,
+            rf.class_date,
+            rf.status as feedback_status,
+
+            subjects.code as subject_code,
+            subjects.name as subject_name,
+            teachers.name as teacher_name,
+            sections.name as section_name,
+            faculties.code as faculty_code,
+            faculties.name as faculty_name,
+
+            r.semester,
+            COALESCE(r.`group`, "ALL") as group_name,
+            CASE 
+                WHEN COALESCE(r.`group`, "ALL") = "ALL" 
+                    THEN "Theory"
+                ELSE CONCAT("Practical – Group ", r.`group`)
+            END as class_label,
+            COALESCE(ac.attendance_count, 0) as attendance_count
+        ')->get();
+
+        // 2) Rows where attendance exists but NO CR feedback
+        $q2 = DB::table('routines as r')
+            ->joinSub($attendanceAgg, 'ac', function ($join) {
+                $join->on('ac.routine_id', '=', 'r.id');
+            })
+            ->leftJoin('routine_feedback as rf', function ($join) {
+                $join->on('rf.routine_id', '=', 'r.id')
+                     ->on('rf.class_date', '=', 'ac.date');
+            })
+            ->leftJoin('subjects', 'r.subject_id', '=', 'subjects.id')
+            ->leftJoin('teachers', 'r.teacher_id', '=', 'teachers.id')
+            ->leftJoin('sections', 'r.section_id', '=', 'sections.id')
+            ->leftJoin('faculties', 'r.faculty_id', '=', 'faculties.id')
+            ->whereBetween('ac.date', [$from, $to])
+            ->whereNull('rf.id'); // attendance but no CR feedback
+
+        if ($facultyId) $q2->where('r.faculty_id', $facultyId);
+        if ($sectionId) $q2->where('r.section_id', $sectionId);
+        if ($semester)  $q2->where('r.semester', $semester);
+        if ($subjectId) $q2->where('r.subject_id', $subjectId);
+
+        $q2 = $q2->selectRaw('
+            r.id as routine_id,
+            ac.date as class_date,
+            NULL as feedback_status,
+
+            subjects.code as subject_code,
+            subjects.name as subject_name,
+            teachers.name as teacher_name,
+            sections.name as section_name,
+            faculties.code as faculty_code,
+            faculties.name as faculty_name,
+
+            r.semester,
+            COALESCE(r.`group`, "ALL") as group_name,
+            CASE 
+                WHEN COALESCE(r.`group`, "ALL") = "ALL" 
+                    THEN "Theory"
+                ELSE CONCAT("Practical – Group ", r.`group`)
+            END as class_label,
+            ac.attendance_count as attendance_count
+        ')->get();
+
+        // Merge both sets
+        $classes = $q1->concat($q2);
+
+        // Determine issue type
+        foreach ($classes as $c) {
+            $att = (int) ($c->attendance_count ?? 0);
+            $status = $c->feedback_status;
+
+            if ($status === 'taught' && $att == 0) {
+                $c->issue_type = 'Marked "taught" but no attendance recorded';
+            } elseif ($status === 'taught' && $att > 0 && $att < 5) {
+                $c->issue_type = 'Marked "taught" but very low attendance';
+            } elseif ($status === 'not_taught' && $att > 0) {
+                $c->issue_type = 'Marked "not taught" but attendance exists';
+            } elseif (is_null($status) && $att > 0) {
+                // TEACHER did attendance; CR did nothing
+                $c->issue_type = 'Attendance recorded but CR/VCR did not set taught/not_taught';
+            }
+        }
+
+        // Keep only contradictions
+        $contradictions = collect($classes)
+            ->filter(fn ($c) => isset($c->issue_type));
+
+        // Collapse duplicates:
+        // one row per (date + subject + teacher + section + semester + group)
+        $grouped = $contradictions->groupBy(function ($c) {
+            return implode('|', [
+                $c->class_date,
+                $c->subject_code,
+                $c->teacher_name,
+                $c->section_name,
+                $c->semester,
+                $c->group_name,
+            ]);
+        });
+
+        $collapsed = $grouped->map(function ($items) {
+            $base = $items->first();
+            $base->attendance_count = $items->sum('attendance_count');
+            $base->issue_type = $items->pluck('issue_type')->unique()->implode(' / ');
+            return $base;
+        });
+
+        return $collapsed
+            ->values()
+            ->take(150);
+    }
+
+    /* ==============================
+       NOT TAUGHT DETAILS
+       ============================== */
+    protected function getNotTaughtDetails(
+        $from,
+        $to,
+        $facultyId,
+        $teacherId,
+        $sectionId,
+        $semester,
+        $subjectId
+    ) {
         $query = DB::table('routine_feedback as rf')
             ->join('routines as r', 'rf.routine_id', '=', 'r.id')
             ->leftJoin('subjects', 'r.subject_id', '=', 'subjects.id')
             ->leftJoin('teachers', 'r.teacher_id', '=', 'teachers.id')
+            ->leftJoin('faculties', 'r.faculty_id', '=', 'faculties.id')
             ->leftJoin('sections', 'r.section_id', '=', 'sections.id')
-            ->leftJoin('attendances as a', function ($join) {
-                $join->on('rf.routine_id', '=', 'a.routine_id')
-                     ->on('rf.class_date', '=', 'a.date');
-            })
             ->whereBetween('rf.class_date', [$from, $to])
-            ->where('rf.status', 'taught');
+            ->where('rf.status', 'not_taught');
 
         if ($facultyId) $query->where('r.faculty_id', $facultyId);
+        if ($teacherId) $query->where('r.teacher_id', $teacherId);
         if ($sectionId) $query->where('r.section_id', $sectionId);
         if ($semester)  $query->where('r.semester', $semester);
         if ($subjectId) $query->where('r.subject_id', $subjectId);
 
         return $query
             ->selectRaw('
-                rf.class_date as class_date,
-                subjects.code as subject_code,
-                subjects.name as subject_name,
-                teachers.name as teacher_name,
-                sections.name as section_name,
+                rf.class_date,
+                faculties.code  as faculty_code,
+                faculties.name  as faculty_name,
+                sections.name   as section_name,
                 r.semester,
-                COUNT(DISTINCT a.id) as attendance_count,
+                subjects.code   as subject_code,
+                subjects.name   as subject_name,
+                teachers.name   as teacher_name,
+                COALESCE(r.`group`, "ALL") as group_name,
                 CASE 
-                    WHEN COUNT(DISTINCT a.id) = 0 THEN "No attendance recorded"
-                    WHEN COUNT(DISTINCT a.id) < 5 THEN "Very low attendance records"
-                    ELSE "Normal"
-                END as issue_type
+                    WHEN COALESCE(r.`group`, "ALL") = "ALL" 
+                        THEN "Theory"
+                    ELSE CONCAT("Practical – Group ", COALESCE(r.`group`, ""))
+                END as class_label
             ')
             ->groupBy(
                 'rf.class_date',
+                'faculties.code',
+                'faculties.name',
+                'sections.name',
+                'r.semester',
                 'subjects.code',
                 'subjects.name',
                 'teachers.name',
-                'sections.name',
-                'r.semester',
-                'rf.routine_id'
+                DB::raw('r.`group`')
             )
-            ->having('attendance_count', '<', 5)
             ->orderBy('rf.class_date', 'desc')
-            ->limit(50)
+            ->limit(150)
             ->get();
     }
 
+    /* ==============================
+       STUDENT TIMELINE
+       ============================== */
     protected function getStudentTimeline(
         $studentId,
         $from,
@@ -660,12 +831,10 @@ class AttendanceAnalyticsController extends Controller
             ->get();
     }
 
-    /**
-     * Subject contrast:
-     * Count cases where a student is ABSENT in Subject X
-     * but PRESENT in at least one other subject on the same day.
-     */
-    protected function getSubjectContrast(
+    /* ==============================
+       CROSS-SUBJECT CONTRAST
+       ============================== */
+   protected function getSubjectContrast(
         $from,
         $to,
         $facultyId,
@@ -673,39 +842,67 @@ class AttendanceAnalyticsController extends Controller
         $semester,
         $batch
     ) {
+        // Query: Find subjects that students are skipping while present in others on the same day
         $query = DB::table('attendances as a_abs')
             ->join('routines as r_abs', 'a_abs.routine_id', '=', 'r_abs.id')
             ->join('subjects as s', 'r_abs.subject_id', '=', 's.id')
+            // Self-join to find where they WERE present on the same day
             ->join('attendances as a_pres', function ($join) {
                 $join->on('a_abs.student_id', '=', 'a_pres.student_id')
                      ->on('a_abs.date', '=', 'a_pres.date');
             })
             ->join('routines as r_pres', 'a_pres.routine_id', '=', 'r_pres.id')
             ->whereBetween('a_abs.date', [$from, $to])
-            ->where('a_abs.status', 'A')
-            ->where('a_pres.status', 'P')
-            ->whereColumn('r_abs.subject_id', '!=', 'r_pres.subject_id');
+            ->where('a_abs.status', 'A')      // Absent here
+            ->where('a_pres.status', 'P')     // Present somewhere else
+            ->whereColumn('r_abs.subject_id', '!=', 'r_pres.subject_id'); // Different subject
 
-        if ($facultyId) $query->where('r_abs.faculty_id', $facultyId);
-        if ($sectionId) $query->where('r_abs.section_id', $sectionId);
-        if ($semester)  $query->where('r_abs.semester', $semester);
-
-        if ($batch) {
+        // Apply Filters
+        if ($facultyId) {
             $query->join('students', 'a_abs.student_id', '=', 'students.id')
-                  ->where('students.batch', $batch);
+                  ->where('students.faculty_id', $facultyId);
+            
+            if ($sectionId) $query->where('students.section_id', $sectionId);
+            if ($batch)     $query->where('students.batch', $batch);
         }
 
+        if ($semester) $query->where('r_abs.semester', $semester);
+
+        // Group by the Subject being Skipped
         return $query
             ->selectRaw('
-                s.id   as subject_id,
                 s.code as subject_code,
                 s.name as subject_name,
-                COUNT(DISTINCT CONCAT(a_abs.student_id, "|", a_abs.date)) as mismatch_count
+                COUNT(DISTINCT a_abs.student_id) as skipping_students,
+                COUNT(*) as total_skip_instances
             ')
             ->groupBy('s.id', 's.code', 's.name')
-            ->orderByDesc('mismatch_count')
-            ->limit(20)
+            ->orderByDesc('total_skip_instances')
+            ->limit(10)
             ->get();
+    }
+
+    /* ==============================
+       HELPER: Default Date Range
+       ============================== */
+    protected function defaultRange($mode, $today)
+    {
+        $to = $today->format('Y-m-d');
+        
+        switch ($mode) {
+            case 'weekly':
+                $from = $today->copy()->startOfWeek()->format('Y-m-d');
+                break;
+            case 'monthly':
+                $from = $today->copy()->startOfMonth()->format('Y-m-d');
+                break;
+            case 'daily':
+            default:
+                $from = $today->format('Y-m-d');
+                break;
+        }
+
+        return [$from, $to];
     }
 
     /* ==============================
@@ -789,13 +986,12 @@ class AttendanceAnalyticsController extends Controller
     {
         $facultyId = $request->get('faculty_id');
         $semester  = $request->get('semester');
-        $batch     = $request->get('batch'); // 1 = new, 2 = old, etc.
+        $batch     = $request->get('batch'); // NEW/OLD or 1/2
 
         if (!$facultyId || !$semester) {
             return response()->json([]);
         }
 
-        // Allow UI to send either "NEW"/"OLD" or 1/2
         if (is_string($batch)) {
             $upper = strtoupper($batch);
             if ($upper === 'NEW') {
@@ -867,28 +1063,5 @@ class AttendanceAnalyticsController extends Controller
         return response()->json($teachers);
     }
 
-    /* ==============================
-       DATE RANGE HELPER
-       ============================== */
-    protected function defaultRange(string $mode, Carbon $today): array
-    {
-        switch ($mode) {
-            case 'weekly':
-                return [
-                    $today->copy()->subDays(6)->toDateString(),
-                    $today->toDateString(),
-                ];
-            case 'monthly':
-                return [
-                    $today->copy()->firstOfMonth()->toDateString(),
-                    $today->toDateString(),
-                ];
-            case 'daily':
-            default:
-                return [
-                    $today->toDateString(),
-                    $today->toDateString(),
-                ];
-        }
-    }
+    
 }

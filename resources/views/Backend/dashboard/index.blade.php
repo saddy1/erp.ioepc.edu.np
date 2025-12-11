@@ -1,923 +1,502 @@
-@extends('Backend.layouts.app')
+@extends('Backend.layouts.app') 
+{{-- Assuming you have a main layout file --}}
+
+@section('title', 'Campus Performance Monitor')
 
 @section('content')
-<div class="max-w-7xl mx-auto p-3 sm:p-4 text-xs sm:text-sm">
+<div class="min-h-screen bg-gray-50 p-6">
+    
+    <div class="flex flex-col md:flex-row justify-between items-center mb-6">
+        <h2 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+            <i class="fas fa-university text-blue-600"></i> Campus Chief Monitor
+        </h2>
+        <button onclick="fetchAnalytics()" 
+            class="mt-4 md:mt-0 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded shadow flex items-center gap-2 transition duration-150">
+            <i class="fas fa-sync-alt"></i> Refresh Data
+        </button>
+    </div>
 
-    {{-- Header --}}
-    <div class="mb-4 flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-2">
+  <div class="bg-white rounded-lg shadow p-6 mb-6">
+    <form id="filterForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         <div>
-            <h1 class="text-base sm:text-lg font-semibold text-slate-900">
-                Attendance & Class Performance Analytics
-            </h1>
-            <p class="text-[11px] sm:text-xs text-slate-500">
-                Track attendance, identify patterns, and detect data contradictions
-            </p>
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">From Date</label>
+            <input type="date" name="from" value="{{ $defaultFrom }}" 
+                class="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 text-sm">
         </div>
-        <a id="exportBtn" href="#"
-           class="inline-flex items-center px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] sm:text-xs font-semibold hover:bg-emerald-700">
-            Download CSV Report
-        </a>
+        
+        <div>
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">To Date</label>
+            <input type="date" name="to" value="{{ $defaultTo }}" 
+                class="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 text-sm">
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Faculty</label>
+            <select name="faculty_id" id="facultySelect" class="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 text-sm">
+                <option value="">All Faculties</option>
+                @foreach($faculties as $f)
+                    <option value="{{ $f->id }}">{{ $f->name }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Section</label>
+            <select name="section_id" id="sectionSelect" class="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 text-sm bg-gray-50">
+                <option value="">All Sections</option>
+                </select>
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Teacher</label>
+            <select name="teacher_id" class="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 text-sm">
+                <option value="">All Teachers</option>
+                @foreach($teachers as $t)
+                    <option value="{{ $t->id }}">{{ $t->name }}</option>
+                @endforeach
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Semester</label>
+            <select name="semester" class="w-full border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 text-sm">
+                <option value="">All Semesters</option>
+                @foreach(range(1, 8) as $s)
+                    <option value="{{ $s }}">Semester {{ $s }}</option>
+                @endforeach
+            </select>
+        </div>
+    </form>
+</div>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        
+        <div class="bg-white rounded-lg shadow border-l-4 border-green-500 p-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <div class="text-xs font-bold text-green-600 uppercase mb-1">Avg Attendance</div>
+                    <div class="text-2xl font-bold text-gray-800" id="kpi-present-rate">--%</div>
+                    <div class="text-xs text-gray-500 mt-1" id="kpi-total-slots">Total Classes: --</div>
+                </div>
+                <div class="text-gray-300 text-3xl"><i class="fas fa-users"></i></div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow border-l-4 border-blue-500 p-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <div class="text-xs font-bold text-blue-600 uppercase mb-1">Classes Taught</div>
+                    <div class="text-2xl font-bold text-gray-800" id="kpi-taught-rate">--%</div>
+                    <div class="text-xs text-gray-500 mt-1" id="kpi-taught-raw">-- / -- logs</div>
+                </div>
+                <div class="text-gray-300 text-3xl"><i class="fas fa-chalkboard-teacher"></i></div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow border-l-4 border-red-500 p-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <div class="text-xs font-bold text-red-600 uppercase mb-1">Missed/Cancelled</div>
+                    <div class="text-2xl font-bold text-gray-800" id="kpi-not-taught">--</div>
+                    <div class="text-xs text-gray-500 mt-1">Reported by CR</div>
+                </div>
+                <div class="text-gray-300 text-3xl"><i class="fas fa-times-circle"></i></div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow border-l-4 border-yellow-500 p-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <div class="text-xs font-bold text-yellow-600 uppercase mb-1">Data Red Flags</div>
+                    <div class="text-2xl font-bold text-gray-800" id="kpi-contradictions">--</div>
+                    <div class="text-xs text-gray-500 mt-1">Integrity Issues</div>
+                </div>
+                <div class="text-gray-300 text-3xl"><i class="fas fa-exclamation-triangle"></i></div>
+            </div>
+        </div>
     </div>
 
-    {{-- Filters --}}
-    <div class="mb-4 rounded-2xl border border-slate-200 bg-white shadow-sm px-3 py-4 sm:px-4 sm:py-5">
-        <h2 class="text-xs sm:text-sm font-semibold text-slate-900 mb-3">Filters</h2>
-
-        <form id="filtersForm" class="grid grid-cols-1 lg:grid-cols-4 gap-3 sm:gap-4 text-[11px] sm:text-xs">
-
-            {{-- Mode --}}
-            <div class="space-y-1">
-                <label class="block font-medium text-slate-700">Mode</label>
-                <select name="mode" id="mode" class="w-full border border-slate-300 rounded-lg px-2 py-1.5">
-                    <option value="daily"   {{ $defaultMode === 'daily' ? 'selected' : '' }}>Daily (Today)</option>
-                    <option value="weekly"  {{ $defaultMode === 'weekly' ? 'selected' : '' }}>Last 7 Days</option>
-                    <option value="monthly" {{ $defaultMode === 'monthly' ? 'selected' : '' }}>This Month</option>
-                    <option value="custom"  {{ $defaultMode === 'custom' ? 'selected' : '' }}>Custom Range</option>
-                </select>
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div class="lg:col-span-2 bg-white rounded-lg shadow p-4">
+            <h3 class="text-lg font-bold text-gray-700 mb-4 border-b pb-2">Attendance Trends (Daily)</h3>
+            <div class="relative h-72">
+                <canvas id="trendChart"></canvas>
             </div>
+        </div>
 
-            {{-- From --}}
-            <div class="space-y-1" id="fromWrapper">
-                <label class="block font-medium text-slate-700">From</label>
-                <input type="date" name="from" id="from" value="{{ $defaultFrom }}"
-                       class="w-full border border-slate-300 rounded-lg px-2 py-1.5">
+        <div class="bg-white rounded-lg shadow p-4">
+            <h3 class="text-lg font-bold text-gray-700 mb-4 border-b pb-2">By Faculty</h3>
+            <div class="relative h-72">
+                <canvas id="facultyChart"></canvas>
             </div>
+        </div>
+    </div>
 
-            {{-- To --}}
-            <div class="space-y-1" id="toWrapper">
-                <label class="block font-medium text-slate-700">To</label>
-                <input type="date" name="to" id="to" value="{{ $defaultTo }}"
-                       class="w-full border border-slate-300 rounded-lg px-2 py-1.5">
-            </div>
-
-            {{-- Faculty --}}
-            <div class="space-y-1">
-                <label class="block font-medium text-slate-700">Faculty</label>
-                <select name="faculty_id" id="faculty_id"
-                        class="w-full border border-slate-300 rounded-lg px-2 py-1.5">
-                    <option value="">All Faculties</option>
-                    @foreach($faculties as $f)
-                        <option value="{{ $f->id }}">{{ $f->code }} – {{ $f->name }}</option>
-                    @endforeach
-                </select>
-            </div>
-
-            {{-- Section --}}
-            <div class="space-y-1">
-                <label class="block font-medium text-slate-700">Section</label>
-                <select name="section_id" id="section_id"
-                        class="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-slate-50" disabled>
-                    <option value="">Select faculty first</option>
-                </select>
-            </div>
-
-            {{-- Semester --}}
-            <div class="space-y-1">
-                <label class="block font-medium text-slate-700">Semester</label>
-                <input type="number" name="semester" id="semester"
-                       class="w-full border border-slate-300 rounded-lg px-2 py-1.5"
-                       placeholder="e.g. 1..8">
-            </div>
-
-            {{-- Batch --}}
-            <div class="space-y-1">
-                <label class="block font-medium text-slate-700">Batch</label>
-                <input type="text" name="batch" id="batch"
-                       class="w-full border border-slate-300 rounded-lg px-2 py-1.5"
-                       placeholder="e.g. 2080">
-            </div>
-
-            {{-- Group --}}
-            <div class="space-y-1">
-                <label class="block font-medium text-slate-700">Group</label>
-                <input type="number" name="group_id" id="group_id"
-                       class="w-full border border-slate-300 rounded-lg px-2 py-1.5"
-                       placeholder="e.g. 1, 2">
-            </div>
-
-            {{-- Subject --}}
-            <div class="space-y-1">
-                <label class="block font-medium text-slate-700">Subject</label>
-                <select name="subject_id" id="subject_id"
-                        class="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-slate-50" disabled>
-                    <option value="">Select faculty & semester first</option>
-                </select>
-            </div>
-
-            {{-- Teacher --}}
-            <div class="space-y-1">
-                <label class="block font-medium text-slate-700">Teacher</label>
-                <select name="teacher_id" id="teacher_id"
-                        class="w-full border border-slate-300 rounded-lg px-2 py-1.5">
-                    <option value="">All Teachers</option>
-                    @foreach($teachers as $t)
-                        <option value="{{ $t->id }}">{{ $t->name }}</option>
-                    @endforeach
-                </select>
-            </div>
-
-            {{-- Student --}}
-            <div class="space-y-1">
-                <label class="block font-medium text-slate-700">Student</label>
-                <select name="student_id" id="student_id"
-                        class="w-full border border-slate-300 rounded-lg px-2 py-1.5 bg-slate-50" disabled>
-                    <option value="">Select faculty first</option>
-                </select>
-            </div>
-
-            {{-- Apply --}}
-            <div class="lg:col-span-4 flex items-end justify-end mt-1">
-                <button type="button" id="applyFilters"
-                        class="inline-flex items-center px-4 py-2 rounded-lg bg-slate-900 text-white text-[11px] sm:text-xs font-semibold hover:bg-slate-800">
-                    Apply Filters
+    <div class="bg-white rounded-lg shadow">
+        <div class="border-b border-gray-200">
+            <nav class="flex -mb-px" aria-label="Tabs">
+                <button onclick="switchTab('contradictions', this)" 
+                    class="tab-btn w-1/4 py-4 px-1 text-center border-b-2 font-medium text-sm border-blue-500 text-blue-600 hover:text-blue-800 active-tab">
+                    ⚠️ Red Flags
                 </button>
-            </div>
-        </form>
-    </div>
-
-    {{-- Summary Cards --}}
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        {{-- Total slots --}}
-        <div class="rounded-xl bg-white border border-slate-200 shadow-sm p-3">
-            <p class="text-[10px] text-slate-500">Total Attendance Records</p>
-            <p class="mt-1 text-lg sm:text-xl font-semibold text-slate-900" id="totalSlots">–</p>
-            <p class="text-[10px] text-slate-500">Each record = one student in one class</p>
-        </div>
-
-        {{-- Distinct students --}}
-        <div class="rounded-xl bg-white border border-slate-200 shadow-sm p-3">
-            <p class="text-[10px] text-slate-500">Distinct Students</p>
-            <p class="mt-1 text-lg sm:text-xl font-semibold text-slate-900" id="uniqueStudents">–</p>
-        </div>
-
-        {{-- Present --}}
-        <div class="rounded-xl bg-white border border-emerald-200 shadow-sm p-3">
-            <p class="text-[10px] text-emerald-700">Present</p>
-            <p class="mt-1 text-lg sm:text-xl font-semibold text-emerald-700" id="totalPresent">–</p>
-            <p class="text-[10px] text-emerald-500" id="presentRate">–</p>
-        </div>
-
-        {{-- Absent --}}
-        <div class="rounded-xl bg-white border border-rose-200 shadow-sm p-3">
-            <p class="text-[10px] text-rose-700">Absent</p>
-            <p class="mt-1 text-lg sm:text-xl font-semibold text-rose-700" id="totalAbsent">–</p>
-            <p class="text-[10px] text-rose-500" id="absentRate">–</p>
-        </div>
-    </div>
-
-    {{-- Taught card --}}
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-        <div class="rounded-xl bg-white border border-indigo-200 shadow-sm p-3">
-            <p class="text-[10px] text-indigo-700">Class Taught Rate (CR/VCR feedback)</p>
-            <p class="mt-1 text-lg sm:text-xl font-semibold text-indigo-700" id="taughtRate">–</p>
-            <p class="text-[10px] text-slate-500" id="taughtCount">–</p>
-        </div>
-    </div>
-
-    {{-- Contradictions Alert --}}
-    <div id="contradictionsAlert" class="hidden mb-4 rounded-xl border-2 border-amber-300 bg-amber-50 p-4">
-        <div class="flex items-start gap-3">
-            <svg class="w-5 h-5 text-amber-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <div class="flex-1">
-                <h3 class="text-sm font-semibold text-amber-900">Data Contradictions Detected</h3>
-                <p class="text-xs text-amber-700 mt-1">
-                    Found <span id="contradictionCount">0</span> classes marked as "taught" but with missing or low attendance records.
-                </p>
-                <button id="viewContradictions"
-                        class="mt-2 text-xs font-medium text-amber-900 underline hover:text-amber-800">
-                    View Details →
+                <button onclick="switchTab('notTaught', this)" 
+                    class="tab-btn w-1/4 py-4 px-1 text-center border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                    ❌ Not Taught
                 </button>
+                <button onclick="switchTab('teacherPerf', this)" 
+                    class="tab-btn w-1/4 py-4 px-1 text-center border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                    👨‍🏫 Teachers
+                </button>
+                <button onclick="switchTab('studentPerf', this)" 
+                    class="tab-btn w-1/4 py-4 px-1 text-center border-b-2 border-transparent font-medium text-sm text-gray-500 hover:text-gray-700 hover:border-gray-300">
+                    🎓 Students
+                </button>
+            </nav>
+        </div>
+
+        <div class="p-6">
+            
+            <div id="contradictions" class="tab-content block">
+                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-exclamation-circle text-yellow-400"></i>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-yellow-700">
+                                These records show discrepancies between Teacher Logs and CR Feedback.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200" id="table-contradictions">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teacher</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issue</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendance</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                            </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
-    </div>
 
-    {{-- Contradictions Table --}}
-    <div id="contradictionsTable" class="hidden mb-4 rounded-2xl border border-slate-200 bg-white shadow-sm p-4">
-        <h2 class="text-sm font-semibold text-slate-900 mb-3">Contradiction Details</h2>
-        <div class="overflow-x-auto">
-            <table class="w-full text-[11px]">
-                <thead>
-                    <tr class="border-b border-slate-200">
-                        <th class="text-left py-2 px-2 font-semibold text-slate-700">Date</th>
-                        <th class="text-left py-2 px-2 font-semibold text-slate-700">Subject</th>
-                        <th class="text-left py-2 px-2 font-semibold text-slate-700">Teacher</th>
-                        <th class="text-left py-2 px-2 font-semibold text-slate-700">Section</th>
-                        <th class="text-left py-2 px-2 font-semibold text-slate-700">Semester</th>
-                        <th class="text-left py-2 px-2 font-semibold text-slate-700">Attendance Count</th>
-                        <th class="text-left py-2 px-2 font-semibold text-slate-700">Issue</th>
-                    </tr>
-                </thead>
-                <tbody id="contradictionsBody"></tbody>
-            </table>
-        </div>
-    </div>
-
-    {{-- Charts --}}
-    <div class="space-y-4">
-
-        {{-- Trend Chart --}}
-        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 sm:p-4">
-            <h2 class="text-xs sm:text-sm font-semibold text-slate-900 mb-2">Attendance Trend Over Time</h2>
-            <div class="h-64"><canvas id="trendChart"></canvas></div>
-        </div>
-
-        {{-- Pie charts --}}
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 sm:p-4">
-                <h2 class="text-xs sm:text-sm font-semibold text-slate-900 mb-2">Present vs Absent</h2>
-                <div class="h-64"><canvas id="presentAbsentChart"></canvas></div>
+            <div id="notTaught" class="tab-content hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200" id="table-not-taught">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teacher</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Section</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                            </tbody>
+                    </table>
+                </div>
             </div>
-            <div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 sm:p-4">
-                <h2 class="text-xs sm:text-sm font-semibold text-slate-900 mb-2">Taught vs Not Taught</h2>
-                <div class="h-64"><canvas id="taughtChart"></canvas></div>
+
+            <div id="teacherPerf" class="tab-content hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200" id="table-teachers">
+                        <thead class="bg-gray-800 text-white">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Teacher Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Total Classes</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Present Students</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Avg Attendance</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                            </tbody>
+                    </table>
+                </div>
             </div>
-        </div>
 
-        {{-- By Subject --}}
-        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 sm:p-4">
-            <h2 class="text-xs sm:text-sm font-semibold text-slate-900 mb-2">Attendance by Subject (TH / PR)</h2>
-            <p class="text-[10px] text-slate-500 mb-2">
-                Shows subjects with highest absence rates and cross-subject mismatch (present elsewhere, absent here).
-            </p>
-            <div class="h-72"><canvas id="subjectChart"></canvas></div>
-        </div>
+            <div id="studentPerf" class="tab-content hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200" id="table-students">
+                        <thead class="bg-gray-800 text-white">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Symbol No</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Name</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Section</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Attendance Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                            </tbody>
+                    </table>
+                </div>
+            </div>
 
-        {{-- By Section --}}
-        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 sm:p-4">
-            <h2 class="text-xs sm:text-sm font-semibold text-slate-900 mb-2">Attendance by Section</h2>
-            <div class="h-64"><canvas id="sectionChart"></canvas></div>
         </div>
-
-        {{-- By Faculty --}}
-        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 sm:p-4">
-            <h2 class="text-xs sm:text-sm font-semibold text-slate-900 mb-2">Attendance by Faculty</h2>
-            <div class="h-72"><canvas id="facultyChart"></canvas></div>
-        </div>
-
-        {{-- By Teacher --}}
-        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 sm:p-4">
-            <h2 class="text-xs sm:text-sm font-semibold text-slate-900 mb-2">Attendance by Teacher</h2>
-            <div class="h-96"><canvas id="teacherChart"></canvas></div>
-        </div>
-
-        {{-- Student Timeline --}}
-        <div id="studentTimelineBlock"
-             class="hidden rounded-2xl border border-slate-200 bg-white shadow-sm p-3 sm:p-4">
-            <h2 class="text-xs sm:text-sm font-semibold text-slate-900 mb-2">Student Attendance Timeline</h2>
-            <p class="text-[10px] text-slate-500 mb-2">Daily pattern for the selected student.</p>
-            <div class="h-64"><canvas id="studentTimelineChart"></canvas></div>
-        </div>
-
-        {{-- By Student --}}
-        <div class="rounded-2xl border border-slate-200 bg-white shadow-sm p-3 sm:p-4">
-            <h2 class="text-xs sm:text-sm font-semibold text-slate-900 mb-2">Student-wise Attendance</h2>
-            <p class="text-[10px] text-slate-500 mb-2">Top 40 students by symbol number (after filters).</p>
-            <div class="h-96"><canvas id="studentChart"></canvas></div>
-        </div>
-
     </div>
 </div>
 
+{{-- SCRIPTS --}}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <script>
-document.addEventListener('DOMContentLoaded', () => {
-    const applyBtn     = document.getElementById('applyFilters');
-    const exportBtn    = document.getElementById('exportBtn');
 
-    const modeSelect   = document.getElementById('mode');
-    const fromInput    = document.getElementById('from');
-    const toInput      = document.getElementById('to');
+    // 1. Pass PHP data to JavaScript
+    const allSections = @json($sections);
 
-    const facultySelect = document.getElementById('faculty_id');
-    const sectionSelect = document.getElementById('section_id');
-    const semesterInput = document.getElementById('semester');
-    const batchInput    = document.getElementById('batch');
-    const groupInput    = document.getElementById('group_id');
-    const subjectSelect = document.getElementById('subject_id');
-    const teacherSelect = document.getElementById('teacher_id');
-    const studentSelect = document.getElementById('student_id');
+    document.addEventListener("DOMContentLoaded", function() {
+        const facultySelect = document.getElementById('facultySelect');
+        const sectionSelect = document.getElementById('sectionSelect');
 
-    const contradictionsAlert = document.getElementById('contradictionsAlert');
-    const contradictionsTable = document.getElementById('contradictionsTable');
-    const viewContradictionsBtn = document.getElementById('viewContradictions');
+        // Initialize Section Dropdown
+        populateSections(''); 
 
-    let charts = {};
+        // 2. Listen for Faculty Change
+        facultySelect.addEventListener('change', function() {
+            const selectedFacultyId = this.value;
+            populateSections(selectedFacultyId);
+            
+            // Trigger the analytics fetch immediately after changing
+            fetchAnalytics(); 
+        });
 
-    /* Helpers */
-    function setDisabled(select, disabled, placeholder = null) {
-        select.disabled = disabled;
-        select.classList.toggle('bg-slate-50', disabled);
-        if (placeholder) {
-            select.innerHTML = `<option value="">${placeholder}</option>`;
-        }
-    }
+        // Initial Data Fetch
+        fetchAnalytics();
 
-    function buildUrl(base) {
-        const params = new URLSearchParams(new FormData(document.getElementById('filtersForm')));
-        return `${base}?${params.toString()}`;
-    }
-
-    async function fetchJson(url, params = {}) {
-        const usp = new URLSearchParams(params);
-        const res = await fetch(`${url}?${usp.toString()}`);
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        return await res.json();
-    }
-
-    function formatDate(d) {
-        return d.toISOString().slice(0, 10);
-    }
-
-    function updateDateInputsForMode() {
-        const mode   = modeSelect.value;
-        const today  = new Date();
-        let fromDate = new Date(today);
-
-        if (mode === 'weekly') {
-            fromDate.setDate(today.getDate() - 6);
-        } else if (mode === 'monthly') {
-            fromDate = new Date(today.getFullYear(), today.getMonth(), 1);
-        } else if (mode === 'custom') {
-            // Do not override – user will set manually
-            return;
-        } else {
-            // daily
-            fromDate = new Date(today);
-        }
-
-        fromInput.value = formatDate(fromDate);
-        toInput.value   = formatDate(today);
-    }
-
-    /* Dependent dropdowns */
-
-    async function loadSections() {
-        const facultyId = facultySelect.value;
-
-        if (!facultyId) {
-            setDisabled(sectionSelect, true, "Select faculty first");
-            return;
-        }
-
-        try {
-            const data = await fetchJson("{{ route('admin.analytics.attendance.sections') }}", {
-                faculty_id: facultyId
-            });
-
-            sectionSelect.innerHTML = `<option value="">All Sections</option>`;
-            data.forEach(s => {
-                sectionSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`;
-            });
-            setDisabled(sectionSelect, false);
-        } catch (err) {
-            console.error(err);
-            setDisabled(sectionSelect, true, "Error loading sections");
-        }
-    }
-
-    async function loadSubjects() {
-        const facultyId = facultySelect.value;
-        const semester  = semesterInput.value;
-        const batch     = batchInput.value;
-
-        if (!facultyId || !semester) {
-            setDisabled(subjectSelect, true, "Select faculty & semester first");
-            return;
-        }
-
-        try {
-            const data = await fetchJson("{{ route('admin.analytics.attendance.subjects') }}", {
-                faculty_id: facultyId,
-                semester:   semester,
-                batch:      batch
-            });
-
-            subjectSelect.innerHTML = `<option value="">All Subjects</option>`;
-            data.forEach(s => {
-                subjectSelect.innerHTML += `<option value="${s.id}">${s.code} – ${s.name}</option>`;
-            });
-
-            setDisabled(subjectSelect, false);
-        } catch (err) {
-            console.error(err);
-            setDisabled(subjectSelect, true, "Error loading subjects");
-        }
-    }
-
-    async function loadTeachers() {
-        const facultyId = facultySelect.value;
-        const sectionId = sectionSelect.value;
-        const semester  = semesterInput.value;
-        const subjectId = subjectSelect.value;
-
-        try {
-            const data = await fetchJson("{{ route('admin.analytics.attendance.teachers') }}", {
-                faculty_id: facultyId,
-                section_id: sectionId,
-                semester:   semester,
-                subject_id: subjectId
-            });
-
-            teacherSelect.innerHTML = `<option value="">All Teachers</option>`;
-            data.forEach(t => {
-                teacherSelect.innerHTML += `<option value="${t.id}">${t.name}</option>`;
-            });
-        } catch (err) {
-            console.error(err);
-        }
-    }
-
-    async function loadStudents() {
-        const facultyId = facultySelect.value;
-        const sectionId = sectionSelect.value;
-        const groupId   = groupInput.value;
-
-        if (!facultyId) {
-            setDisabled(studentSelect, true, "Select faculty first");
-            return;
-        }
-
-        try {
-            const data = await fetchJson("{{ route('admin.analytics.attendance.students') }}", {
-                faculty_id: facultyId,
-                section_id: sectionId,
-                group_id:   groupId
-            });
-
-            studentSelect.innerHTML = `<option value="">All Students</option>`;
-            data.forEach(st => {
-                studentSelect.innerHTML += `<option value="${st.id}">${st.symbol_no} – ${st.name}</option>`;
-            });
-
-            setDisabled(studentSelect, false);
-        } catch (err) {
-            console.error(err);
-            setDisabled(studentSelect, true, "Error loading students");
-        }
-    }
-
-    /* Load analytics data */
-
-    async function loadData() {
-        const url = buildUrl("{{ route('admin.analytics.attendance.data') }}");
-
-        try {
-            const res = await fetch(url);
-            const data = await res.json();
-
-            if (!res.ok || data.error) {
-                console.error('API error response:', data);
-                alert("Failed to load data from server.");
-                return;
+        // Listen for changes on the whole form to trigger updates
+        document.getElementById('filterForm').addEventListener('change', function(e) {
+            // Avoid double fetching if the change event came from facultySelect 
+            // (since we handled it manually above)
+            if (e.target.id !== 'facultySelect') {
+                fetchAnalytics();
             }
-
-            try {
-                if (data.global) {
-                    updateSummary(data);
-                }
-                updateContradictions(data.contradictions || []);
-                updateCharts(data);
-
-                // CSV export link
-                exportBtn.href = buildUrl("{{ route('admin.analytics.attendance.export') }}");
-            } catch (renderErr) {
-                console.error('Render error:', renderErr);
-            }
-
-        } catch (networkErr) {
-            console.error('Network error:', networkErr);
-            alert("Failed to load data (network error).");
-        }
-    }
-
-    /* Summary cards */
-
-    function updateSummary(data) {
-        const g = data.global || {};
-        const t = data.taughtStats || {};
-
-        document.getElementById("totalSlots").textContent     = g.totalSlots ?? '0';
-        document.getElementById("uniqueStudents").textContent = g.uniqueStudents ?? '0';
-        document.getElementById("totalPresent").textContent   = g.present ?? '0';
-        document.getElementById("totalAbsent").textContent    = g.absent ?? '0';
-        document.getElementById("presentRate").textContent    = (g.presentRate ?? 0) + "%";
-        document.getElementById("absentRate").textContent     = (g.absentRate ?? 0) + "%";
-
-        document.getElementById("taughtRate").textContent  = (t.taughtRate ?? 0) + "%";
-        document.getElementById("taughtCount").textContent =
-            `${t.taught ?? 0} taught / ${t.totalClasses ?? 0} total classes`;
-    }
-
-    /* Contradictions */
-
-    function updateContradictions(list) {
-        const tbody = document.getElementById("contradictionsBody");
-
-        if (!list || list.length === 0) {
-            contradictionsAlert.classList.add("hidden");
-            contradictionsTable.classList.add("hidden");
-            tbody.innerHTML = "";
-            return;
-        }
-
-        contradictionsAlert.classList.remove("hidden");
-        document.getElementById("contradictionCount").textContent = list.length;
-
-        tbody.innerHTML = list.map(c => `
-            <tr class="border-b">
-                <td class="p-2">${c.class_date}</td>
-                <td class="p-2">${(c.subject_code || '')} ${c.subject_name || ''}</td>
-                <td class="p-2">${c.teacher_name || ''}</td>
-                <td class="p-2">${c.section_name || ''}</td>
-                <td class="p-2">${c.semester || ''}</td>
-                <td class="p-2 text-center">${c.attendance_count}</td>
-                <td class="p-2">${c.issue_type}</td>
-            </tr>
-        `).join("");
-    }
-
-    viewContradictionsBtn.addEventListener("click", () => {
-        contradictionsTable.classList.toggle("hidden");
+        });
     });
 
-    /* Charts */
+    // 3. Helper to filter and repopulate sections
+    function populateSections(facultyId) {
+        const sectionSelect = document.getElementById('sectionSelect');
+        const currentSelection = sectionSelect.value; // Remember selection if possible
 
-    function destroyChart(id) {
-        if (charts[id]) {
-            charts[id].destroy();
-            delete charts[id];
+        // Clear existing options
+        sectionSelect.innerHTML = '<option value="">All Sections</option>';
+
+        // Filter sections
+        // Note: Ensure your Section model has a 'faculty_id' field. 
+        // If sections are generic (not linked to faculty), remove the filter logic.
+        const filtered = facultyId 
+            ? allSections.filter(s => s.faculty_id == facultyId) 
+            : allSections;
+
+        // Populate new options
+        filtered.forEach(s => {
+            const option = document.createElement('option');
+            option.value = s.id;
+            option.textContent = s.name;
+            sectionSelect.appendChild(option);
+        });
+
+        // Visual cue: Change background if active
+        if(facultyId) {
+            sectionSelect.classList.remove('bg-gray-50');
+            sectionSelect.classList.add('bg-white');
+        } else {
+            sectionSelect.classList.add('bg-gray-50');
+            sectionSelect.classList.remove('bg-white');
         }
+    }
+    // --- TAB SWITCHING LOGIC (Tailwind Version) ---
+    function switchTab(tabId, btnElement) {
+        // 1. Hide all tab contents
+        document.querySelectorAll('.tab-content').forEach(el => {
+            el.classList.add('hidden');
+            el.classList.remove('block');
+        });
+
+        // 2. Show selected tab content
+        const target = document.getElementById(tabId);
+        if(target) {
+            target.classList.remove('hidden');
+            target.classList.add('block');
+        }
+
+        // 3. Reset all buttons to inactive state
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('border-blue-500', 'text-blue-600');
+            btn.classList.add('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+        });
+
+        // 4. Set active button style
+        btnElement.classList.remove('border-transparent', 'text-gray-500', 'hover:text-gray-700', 'hover:border-gray-300');
+        btnElement.classList.add('border-blue-500', 'text-blue-600');
+    }
+
+    // --- ANALYTICS LOGIC (Same as before) ---
+    let trendChartCtx = null;
+    let facultyChartCtx = null;
+
+    document.addEventListener("DOMContentLoaded", function() {
+        fetchAnalytics();
+
+        const form = document.getElementById('filterForm');
+        form.addEventListener('change', function() {
+            fetchAnalytics();
+        });
+    });
+
+    function fetchAnalytics() {
+        const formData = new FormData(document.getElementById('filterForm'));
+        const params = new URLSearchParams(formData);
+
+        document.body.style.cursor = 'wait';
+
+        // NOTE: Ensure this route name matches your web.php
+        fetch("{{ route('analytics.data') }}?" + params.toString())
+            .then(response => response.json())
+            .then(data => {
+                updateKPIs(data);
+                updateCharts(data);
+                updateTables(data);
+                document.body.style.cursor = 'default';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                document.body.style.cursor = 'default';
+            });
+    }
+
+    function updateKPIs(data) {
+        document.getElementById('kpi-present-rate').innerText = data.global.presentRate + '%';
+        document.getElementById('kpi-total-slots').innerText = 'Total Classes: ' + data.global.totalSlots;
+        
+        document.getElementById('kpi-taught-rate').innerText = data.taughtStats.taughtRate + '%';
+        document.getElementById('kpi-taught-raw').innerText = `${data.taughtStats.taught} / ${data.taughtStats.totalClasses} logs`;
+        
+        document.getElementById('kpi-not-taught').innerText = data.taughtStats.notTaught;
+        document.getElementById('kpi-contradictions').innerText = data.contradictions.length;
     }
 
     function updateCharts(data) {
-        const trend          = data.trendByDate || [];
-        const bySubject      = data.bySubject || [];
-        const bySection      = data.bySection || [];
-        const byFaculty      = data.byFaculty || [];
-        const byTeacher      = data.byTeacher || [];
-        const byStudent      = data.byStudent || [];
-        const timeline       = data.studentTimeline || [];
-        const subjectContrast = data.subjectContrast || [];
-        const g              = data.global || {};
-        const t              = data.taughtStats || {};
+        // Trend Chart
+        const dates = data.trendByDate.map(i => i.day);
+        const presentCounts = data.trendByDate.map(i => i.present);
+        
+        const ctx1 = document.getElementById('trendChart').getContext('2d');
+        if(trendChartCtx) trendChartCtx.destroy();
+        
+        trendChartCtx = new Chart(ctx1, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [{
+                    label: 'Present Students',
+                    data: presentCounts,
+                    borderColor: '#3b82f6', // Tailwind blue-500
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: { maintainAspectRatio: false }
+        });
 
-        /* 1. Trend line */
-        destroyChart('trendChart');
-        if (trend.length) {
-            const labels  = trend.map(r => r.day);
-            const present = trend.map(r => r.present);
-            const absent  = trend.map(r => r.absent);
+        // Faculty Chart
+        const facNames = data.byFaculty.map(f => f.faculty_code);
+        const facRates = data.byFaculty.map(f => f.present_rate);
 
-            charts.trendChart = new Chart(
-                document.getElementById('trendChart').getContext('2d'),
-                {
-                    type: 'line',
-                    data: {
-                        labels,
-                        datasets: [
-                            {
-                                label: 'Present',
-                                data: present,
-                                tension: 0.3,
-                                borderWidth: 2,
-                                pointRadius: 2
-                            },
-                            {
-                                label: 'Absent',
-                                data: absent,
-                                tension: 0.3,
-                                borderWidth: 2,
-                                pointRadius: 2
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: { ticks: { maxRotation: 45, minRotation: 45 } },
-                            y: { beginAtZero: true }
-                        }
-                    }
-                }
-            );
-        }
+        const ctx2 = document.getElementById('facultyChart').getContext('2d');
+        if(facultyChartCtx) facultyChartCtx.destroy();
 
-        /* 2. Present vs Absent */
-        destroyChart('presentAbsentChart');
-        if ((g.present || 0) + (g.absent || 0) > 0) {
-            charts.presentAbsentChart = new Chart(
-                document.getElementById('presentAbsentChart').getContext('2d'),
-                {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['Present', 'Absent'],
-                        datasets: [{
-                            data: [g.present || 0, g.absent || 0]
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { position: 'bottom' } }
-                    }
-                }
-            );
-        }
-
-        /* 3. Taught vs Not Taught */
-        destroyChart('taughtChart');
-        if ((t.taught || 0) + (t.notTaught || 0) > 0) {
-            charts.taughtChart = new Chart(
-                document.getElementById('taughtChart').getContext('2d'),
-                {
-                    type: 'doughnut',
-                    data: {
-                        labels: ['Taught', 'Not Taught'],
-                        datasets: [{
-                            data: [t.taught || 0, t.notTaught || 0]
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { position: 'bottom' } }
-                    }
-                }
-            );
-        }
-
-        /* 4. Subject-wise (TH/PR + mismatch) */
-        destroyChart('subjectChart');
-        if (bySubject.length) {
-            // Sort by absent_rate desc, top 10
-            const sorted = [...bySubject].sort(
-                (a, b) => (b.absent_rate || 0) - (a.absent_rate || 0)
-            ).slice(0, 10);
-
-            const labels       = [];
-            const absentRates  = [];
-            const mismatchData = [];
-
-            // Build map for subjectContrast (mismatch_count per subject_id)
-            const mismatchMap = {};
-            subjectContrast.forEach(sc => {
-                mismatchMap[sc.subject_id] = sc.mismatch_count || 0;
-            });
-
-            sorted.forEach(s => {
-                const typeLabel = s.class_type === 'Practical' ? 'PR' :
-                                  (s.class_type === 'Theory' ? 'TH' : (s.class_type || ''));
-                const label = `${s.subject_code || ''} ${s.subject_name || ''} (Sem ${s.semester}, ${typeLabel})`;
-
-                labels.push(label);
-                absentRates.push(s.absent_rate || 0);
-                mismatchData.push(mismatchMap[s.subject_id] || 0);
-            });
-
-            charts.subjectChart = new Chart(
-                document.getElementById('subjectChart').getContext('2d'),
-                {
-                    type: 'bar',
-                    data: {
-                        labels,
-                        datasets: [
-                            {
-                                label: 'Absence %',
-                                data: absentRates
-                            },
-                            {
-                                label: 'Mismatch count (Present elsewhere, Absent in this)',
-                                data: mismatchData
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        indexAxis: 'y',
-                        scales: {
-                            x: { beginAtZero: true }
-                        }
-                    }
-                }
-            );
-        }
-
-        /* 5. Section-wise */
-        destroyChart('sectionChart');
-        if (bySection.length) {
-            const labels = bySection.map(s => s.section_name || '—');
-            const rate   = bySection.map(s => s.present_rate || 0);
-
-            charts.sectionChart = new Chart(
-                document.getElementById('sectionChart').getContext('2d'),
-                {
-                    type: 'bar',
-                    data: {
-                        labels,
-                        datasets: [{
-                            label: 'Present %',
-                            data: rate
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: { beginAtZero: true, max: 100 }
-                        }
-                    }
-                }
-            );
-        }
-
-        /* 6. Faculty-wise */
-        destroyChart('facultyChart');
-        if (byFaculty.length) {
-            const labels = byFaculty.map(f => f.faculty_code || f.faculty_name || '');
-            const rate   = byFaculty.map(f => f.present_rate || 0);
-
-            charts.facultyChart = new Chart(
-                document.getElementById('facultyChart').getContext('2d'),
-                {
-                    type: 'bar',
-                    data: {
-                        labels,
-                        datasets: [{
-                            label: 'Present %',
-                            data: rate
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: { beginAtZero: true, max: 100 }
-                        }
-                    }
-                }
-            );
-        }
-
-        /* 7. Teacher-wise */
-        destroyChart('teacherChart');
-        if (byTeacher.length) {
-            const labels = byTeacher.map(t => t.teacher_name || '');
-            const rate   = byTeacher.map(t => t.present_rate || 0);
-
-            charts.teacherChart = new Chart(
-                document.getElementById('teacherChart').getContext('2d'),
-                {
-                    type: 'bar',
-                    data: {
-                        labels,
-                        datasets: [{
-                            label: 'Present %',
-                            data: rate
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: { beginAtZero: true, max: 100 }
-                        }
-                    }
-                }
-            );
-        }
-
-        /* 8. Student timeline */
-        const timelineBlock = document.getElementById('studentTimelineBlock');
-        destroyChart('studentTimelineChart');
-
-        if (timeline.length) {
-            timelineBlock.classList.remove('hidden');
-
-            const labels  = timeline.map(d => d.day);
-            const present = timeline.map(d => d.present);
-            const absent  = timeline.map(d => d.absent);
-
-            charts.studentTimelineChart = new Chart(
-                document.getElementById('studentTimelineChart').getContext('2d'),
-                {
-                    type: 'line',
-                    data: {
-                        labels,
-                        datasets: [
-                            {
-                                label: 'Present',
-                                data: present,
-                                borderWidth: 2,
-                                tension: 0.3,
-                                pointRadius: 2
-                            },
-                            {
-                                label: 'Absent',
-                                data: absent,
-                                borderWidth: 2,
-                                tension: 0.3,
-                                pointRadius: 2
-                            }
-                        ]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: { beginAtZero: true }
-                        }
-                    }
-                }
-            );
-        } else {
-            timelineBlock.classList.add('hidden');
-        }
-
-        /* 9. Student-wise bar */
-        destroyChart('studentChart');
-        if (byStudent.length) {
-            const limited = byStudent.slice(0, 40);
-
-            const labels = limited.map(s => `${s.symbol_no || ''} – ${s.student_name || ''}`);
-            const rate   = limited.map(s => s.present_rate || 0);
-
-            charts.studentChart = new Chart(
-                document.getElementById('studentChart').getContext('2d'),
-                {
-                    type: 'bar',
-                    data: {
-                        labels,
-                        datasets: [{
-                            label: 'Present %',
-                            data: rate
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            y: { beginAtZero: true, max: 100 }
-                        }
-                    }
-                }
-            );
-        }
+        facultyChartCtx = new Chart(ctx2, {
+            type: 'bar',
+            data: {
+                labels: facNames,
+                datasets: [{
+                    label: 'Attendance %',
+                    data: facRates,
+                    backgroundColor: '#10b981', // Tailwind green-500
+                }]
+            },
+            options: { 
+                maintainAspectRatio: false,
+                scales: { y: { beginAtZero: true, max: 100 } }
+            }
+        });
     }
 
-    /* Event listeners */
+    function updateTables(data) {
+        const clearTbody = (id) => document.querySelector(`#${id} tbody`).innerHTML = '';
+        const addRow = (id, html) => document.querySelector(`#${id} tbody`).insertAdjacentHTML('beforeend', html);
 
-    modeSelect.addEventListener('change', () => {
-        updateDateInputsForMode();
-    });
-
-    facultySelect.addEventListener("change", () => {
-        loadSections();
-        loadStudents();
-        if (semesterInput.value) loadSubjects();
-        loadTeachers();
-    });
-
-    sectionSelect.addEventListener("change", () => {
-        loadStudents();
-        loadTeachers();
-    });
-
-    semesterInput.addEventListener("input", () => {
-        if (facultySelect.value) {
-            loadSubjects();
-            loadTeachers();
+        // 1. Contradictions
+        clearTbody('table-contradictions');
+        if(data.contradictions.length === 0) {
+            addRow('table-contradictions', '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">No red flags found!</td></tr>');
+        } else {
+            data.contradictions.forEach(row => {
+                let html = `
+                    <tr class="bg-red-50 hover:bg-red-100 transition">
+                        <td class="px-6 py-4 whitespace-nowrap">${row.class_date}</td>
+                        <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">${row.teacher_name}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.subject_code}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-red-600 font-bold text-xs">${row.issue_type}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-gray-700">${row.attendance_count}</td>
+                    </tr>`;
+                addRow('table-contradictions', html);
+            });
         }
-    });
 
-    batchInput.addEventListener("input", () => {
-        if (facultySelect.value && semesterInput.value) {
-            loadSubjects();
-            loadTeachers();
-        }
-    });
+        // 2. Not Taught
+        clearTbody('table-not-taught');
+        data.notTaughtDetails.forEach(row => {
+            let html = `
+                <tr class="hover:bg-gray-50 transition">
+                    <td class="px-6 py-4 whitespace-nowrap">${row.class_date}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${row.teacher_name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${row.subject_name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.section_name} (${row.class_label})</td>
+                    <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Not Taught</span></td>
+                </tr>`;
+            addRow('table-not-taught', html);
+        });
 
-    groupInput.addEventListener("input", () => {
-        loadStudents();
-    });
+        // 3. Teachers
+        clearTbody('table-teachers');
+        data.byTeacher.forEach(row => {
+            let rateColor = row.present_rate < 50 ? 'text-red-600 font-bold' : 'text-green-600';
+            let html = `
+                <tr class="hover:bg-gray-50 transition">
+                    <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">${row.teacher_name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.total}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.present}</td>
+                    <td class="px-6 py-4 whitespace-nowrap ${rateColor}">${row.present_rate}%</td>
+                </tr>`;
+            addRow('table-teachers', html);
+        });
 
-    subjectSelect.addEventListener("change", () => {
-        loadTeachers();
-    });
-
-    applyBtn.addEventListener("click", loadData);
-
-    /* Init */
-    setDisabled(sectionSelect, true, "Select faculty first");
-    setDisabled(subjectSelect, true, "Select faculty & semester first");
-    setDisabled(studentSelect, true, "Select faculty first");
-
-    updateDateInputsForMode();
-    loadData();
-});
+        // 4. Students
+        clearTbody('table-students');
+        data.byStudent.forEach(row => {
+            let color = row.present_rate < 75 ? 'bg-red-500' : 'bg-green-500';
+            let html = `
+                <tr class="hover:bg-gray-50 transition">
+                    <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.symbol_no}</td>
+                    <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">${row.student_name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.section_name}</td>
+                    <td class="px-6 py-4 whitespace-nowrap align-middle">
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                            <div class="${color} h-2.5 rounded-full" style="width: ${row.present_rate}%"></div>
+                        </div>
+                        <span class="text-xs text-gray-500 mt-1 block">${row.present_rate}%</span>
+                    </td>
+                </tr>`;
+            addRow('table-students', html);
+        });
+    }
 </script>
 @endsection

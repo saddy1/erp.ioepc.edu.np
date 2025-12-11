@@ -160,6 +160,8 @@ Route::group(['middleware' => 'admin.auth'], function () {
     });
 
 
+Route::get('/analytics/dashboard', [AttendanceAnalyticsController::class, 'index'])->name('analytics.index');
+Route::get('/analytics/data', [AttendanceAnalyticsController::class, 'data'])->name('analytics.data');
 
     Route::prefix('admin/analytics/attendance')
         ->name('admin.analytics.attendance.')

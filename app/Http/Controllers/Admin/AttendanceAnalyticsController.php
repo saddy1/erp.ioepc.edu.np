@@ -542,40 +542,43 @@ class AttendanceAnalyticsController extends Controller
             ->get();
     }
 
-    protected function getTaughtStatistics(
-        $from,
-        $to,
-        $facultyId,
-        $teacherId,
-        $sectionId,
-        $semester,
-        $subjectId
+protected function getTaughtStatistics(
+        $from, $to, $facultyId, $teacherId, $sectionId, $semester, $subjectId
     ) {
         $query = DB::table('routine_feedback as rf')
             ->join('routines as r', 'rf.routine_id', '=', 'r.id')
             ->whereBetween('rf.class_date', [$from, $to]);
 
+        // Apply filters
         if ($teacherId) $query->where('r.teacher_id', $teacherId);
         if ($facultyId) $query->where('r.faculty_id', $facultyId);
         if ($sectionId) $query->where('r.section_id', $sectionId);
         if ($semester)  $query->where('r.semester', $semester);
         if ($subjectId) $query->where('r.subject_id', $subjectId);
 
+        // LOGIC CHANGE: 
+        // We create a unique signature for a "Session": Date + Subject + Group + Section
+        // This ensures 3 periods of "Computer Programming (Group A)" on Friday count as 1.
+        $sessionSignature = "CONCAT(
+            rf.class_date, '_', 
+            r.subject_id, '_', 
+            r.section_id, '_', 
+            COALESCE(r.group, 'ALL')
+        )";
+
         $result = $query
-            ->selectRaw('
-                COUNT(*) as total,
-                SUM(CASE WHEN rf.status = "taught" THEN 1 ELSE 0 END) as taught,
-                SUM(CASE WHEN rf.status = "not_taught" THEN 1 ELSE 0 END) as not_taught
-            ')
+            ->selectRaw("
+                COUNT(DISTINCT $sessionSignature) as total,
+                COUNT(DISTINCT CASE WHEN rf.status = 'taught' THEN $sessionSignature END) as taught,
+                COUNT(DISTINCT CASE WHEN rf.status = 'not_taught' THEN $sessionSignature END) as not_taught
+            ")
             ->first();
 
         $total     = (int) ($result->total ?? 0);
         $taught    = (int) ($result->taught ?? 0);
         $notTaught = (int) ($result->not_taught ?? 0);
 
-        $taughtRate = $total > 0
-            ? round(($taught / $total) * 100, 1)
-            : 0;
+        $taughtRate = $total > 0 ? round(($taught / $total) * 100, 1) : 0;
 
         return [
             'totalClasses' => $total,

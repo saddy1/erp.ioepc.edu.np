@@ -155,35 +155,50 @@
 
         <div class="p-6">
             
-            <div id="contradictions" class="tab-content block">
-                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-                    <div class="flex">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-exclamation-circle text-yellow-400"></i>
-                        </div>
-                        <div class="ml-3">
-                            <p class="text-sm text-yellow-700">
-                                These records show discrepancies between Teacher Logs and CR Feedback.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200" id="table-contradictions">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teacher</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issue</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendance</th>
-                            </tr>
-                        </thead>
-                        <tbody class="bg-white divide-y divide-gray-200 text-sm">
-                            </tbody>
-                    </table>
-                </div>
-            </div>
+         <div id="contradictions" class="tab-content block">
+    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+        <div class="ml-3">
+            <p class="text-sm text-yellow-700">
+                These records show discrepancies between Teacher Logs and CR Feedback.
+            </p>
+        </div>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200" id="table-contradictions">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Faculty</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teacher</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Issue</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Attendance</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="notTaught" class="tab-content hidden">
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200" id="table-not-taught">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Faculty</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Teacher</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Section</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                </tbody>
+        </table>
+    </div>
+</div>
 
             <div id="notTaught" class="tab-content hidden">
                 <div class="overflow-x-auto">
@@ -209,7 +224,7 @@
                         <thead class="bg-gray-800 text-white">
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Teacher Name</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Total Classes</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Total Students</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Present Students</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Avg Attendance</th>
                             </tr>
@@ -430,73 +445,77 @@
     }
 
     function updateTables(data) {
-        const clearTbody = (id) => document.querySelector(`#${id} tbody`).innerHTML = '';
-        const addRow = (id, html) => document.querySelector(`#${id} tbody`).insertAdjacentHTML('beforeend', html);
+    const clearTbody = (id) => document.querySelector(`#${id} tbody`).innerHTML = '';
+    const addRow = (id, html) => document.querySelector(`#${id} tbody`).insertAdjacentHTML('beforeend', html);
 
-        // 1. Contradictions
-        clearTbody('table-contradictions');
-        if(data.contradictions.length === 0) {
-            addRow('table-contradictions', '<tr><td colspan="5" class="px-6 py-4 text-center text-gray-500">No red flags found!</td></tr>');
-        } else {
-            data.contradictions.forEach(row => {
-                let html = `
-                    <tr class="bg-red-50 hover:bg-red-100 transition">
-                        <td class="px-6 py-4 whitespace-nowrap">${row.class_date}</td>
-                        <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">${row.teacher_name}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.subject_code}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-red-600 font-bold text-xs">${row.issue_type}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-gray-700">${row.attendance_count}</td>
-                    </tr>`;
-                addRow('table-contradictions', html);
-            });
-        }
-
-        // 2. Not Taught
-        clearTbody('table-not-taught');
-        data.notTaughtDetails.forEach(row => {
+    // 1. Contradictions Table
+    clearTbody('table-contradictions');
+    if(data.contradictions.length === 0) {
+        // Colspan increased to 6 to account for new column
+        addRow('table-contradictions', '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">No red flags found!</td></tr>');
+    } else {
+        data.contradictions.forEach(row => {
             let html = `
-                <tr class="hover:bg-gray-50 transition">
+                <tr class="bg-red-50 hover:bg-red-100 transition">
                     <td class="px-6 py-4 whitespace-nowrap">${row.class_date}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${row.teacher_name}</td>
-                    <td class="px-6 py-4 whitespace-nowrap">${row.subject_name}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.section_name} (${row.class_label})</td>
-                    <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Not Taught</span></td>
-                </tr>`;
-            addRow('table-not-taught', html);
-        });
-
-        // 3. Teachers
-        clearTbody('table-teachers');
-        data.byTeacher.forEach(row => {
-            let rateColor = row.present_rate < 50 ? 'text-red-600 font-bold' : 'text-green-600';
-            let html = `
-                <tr class="hover:bg-gray-50 transition">
+                    <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-700">${row.faculty_code}</td>
                     <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">${row.teacher_name}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.total}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.present}</td>
-                    <td class="px-6 py-4 whitespace-nowrap ${rateColor}">${row.present_rate}%</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.subject_code}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-red-600 font-bold text-xs">${row.issue_type}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-gray-700">${row.attendance_count}</td>
                 </tr>`;
-            addRow('table-teachers', html);
-        });
-
-        // 4. Students
-        clearTbody('table-students');
-        data.byStudent.forEach(row => {
-            let color = row.present_rate < 75 ? 'bg-red-500' : 'bg-green-500';
-            let html = `
-                <tr class="hover:bg-gray-50 transition">
-                    <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.symbol_no}</td>
-                    <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">${row.student_name}</td>
-                    <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.section_name}</td>
-                    <td class="px-6 py-4 whitespace-nowrap align-middle">
-                        <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                            <div class="${color} h-2.5 rounded-full" style="width: ${row.present_rate}%"></div>
-                        </div>
-                        <span class="text-xs text-gray-500 mt-1 block">${row.present_rate}%</span>
-                    </td>
-                </tr>`;
-            addRow('table-students', html);
+            addRow('table-contradictions', html);
         });
     }
+
+// 2. Not Taught Table
+clearTbody('table-not-taught');
+data.notTaughtDetails.forEach(row => {
+    let html = `
+        <tr class="hover:bg-gray-50 transition">
+            <td class="px-6 py-4 whitespace-nowrap">${row.class_date}</td>
+            <td class="px-6 py-4 whitespace-nowrap font-bold text-gray-700">${row.faculty_code}</td>
+            <td class="px-6 py-4 whitespace-nowrap">${row.teacher_name}</td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <div class="text-sm font-medium text-gray-900">${row.subject_name}</div>
+                <div class="text-xs text-gray-500">Periods: ${row.periods}</div> </td>
+            <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.section_name} (${row.class_label})</td>
+            <td class="px-6 py-4 whitespace-nowrap"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">Not Taught</span></td>
+        </tr>`;
+    addRow('table-not-taught', html);
+});
+    // 3. Teachers
+    clearTbody('table-teachers');
+    data.byTeacher.forEach(row => {
+        let rateColor = row.present_rate < 50 ? 'text-red-600 font-bold' : 'text-green-600';
+        let html = `
+            <tr class="hover:bg-gray-50 transition">
+                <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">${row.teacher_name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.total}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.present}</td>
+                <td class="px-6 py-4 whitespace-nowrap ${rateColor}">${row.present_rate}%</td>
+            </tr>`;
+        addRow('table-teachers', html);
+    });
+
+    // 4. Students
+    clearTbody('table-students');
+    data.byStudent.forEach(row => {
+        let color = row.present_rate < 75 ? 'bg-red-500' : 'bg-green-500';
+        let html = `
+            <tr class="hover:bg-gray-50 transition">
+                <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.symbol_no}</td>
+                <td class="px-6 py-4 whitespace-nowrap font-medium text-gray-900">${row.student_name}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-gray-500">${row.section_name}</td>
+                <td class="px-6 py-4 whitespace-nowrap align-middle">
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+                        <div class="${color} h-2.5 rounded-full" style="width: ${row.present_rate}%"></div>
+                    </div>
+                    <span class="text-xs text-gray-500 mt-1 block">${row.present_rate}%</span>
+                </td>
+            </tr>`;
+        addRow('table-students', html);
+    });
+}
 </script>
 @endsection

@@ -17,6 +17,7 @@ use App\Http\Controllers\Teacher\AttendanceController;
 use App\Http\Controllers\Student\StudentDashboardController;
 use App\Http\Controllers\Admin\CrRoleController;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\Admin\DepartmentRoleController;
 
 use function Symfony\Component\String\u;
 
@@ -119,6 +120,14 @@ Route::group(['middleware' => 'teacher.auth'], function () {
         ->name('teacher.logout');
 });
 
+
+
+
+
+
+
+
+
 Route::group(['middleware' => 'admin.auth'], function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
@@ -160,6 +169,25 @@ Route::group(['middleware' => 'admin.auth'], function () {
     });
 
 
+
+Route::prefix('admin/departments')
+    ->name('admin.departments.')
+    ->group(function () {
+        Route::get('/', [DepartmentRoleController::class, 'index'])->name('index');
+
+        // NEW: create department
+        Route::post('/', [DepartmentRoleController::class, 'store'])->name('store');
+
+        Route::get('/{department}/edit-roles', [DepartmentRoleController::class, 'editRoles'])->name('editRoles');
+        Route::post('/{department}/roles', [DepartmentRoleController::class, 'storeRoles'])->name('storeRoles');
+    });
+
+
+
+
+
+
+    
 Route::get('/analytics/dashboard', [AttendanceAnalyticsController::class, 'index'])->name('analytics.index');
 Route::get('/analytics/data', [AttendanceAnalyticsController::class, 'data'])->name('analytics.data');
 

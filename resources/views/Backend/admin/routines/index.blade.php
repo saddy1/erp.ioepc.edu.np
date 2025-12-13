@@ -734,13 +734,17 @@
 
     {{-- Make teacher list available to JS --}}
     <script>
-        window.ALL_TEACHERS = @json(
-            $teachers->map(function ($t) {
-                return [
-                    'id' => $t->id,
-                    'label' => $t->name . ($t->faculty?->code ? ' (' . $t->faculty->code . ')' : ''),
-                ];
-            }));
+     window.ALL_TEACHERS = @json(
+    $teachers->map(function ($t) {
+        return [
+            'id' => $t->id,
+            'label' => ($t->nick_name ? $t->nick_name . ' - ' : '') .
+                       $t->name .
+                       ($t->faculty?->code ? ' (' . $t->faculty->code . ')' : ''),
+        ];
+    })
+);
+
 
         // For create form we only keep old() selections
         window.PRESELECTED_TEACHERS = @json(old('teacher_ids', []));
@@ -1049,7 +1053,7 @@
             }
 
             // ---------- section + type -> group ----------
-          function updateGroupOptions() {
+         function updateGroupOptions() {
     if (!groupSelect) return;
 
     const sectionText = sectionSelect && sectionSelect.selectedIndex > -1

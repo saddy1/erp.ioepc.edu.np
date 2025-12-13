@@ -14,7 +14,19 @@ class TeacherController extends Controller
     {
         $term = $request->query('q', '');
 
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
         $teachers = Teacher::with('faculty')
+            // 🔐 HOD restriction
+            ->when($admin && $admin->isDepartmentAdmin(), function ($q) use ($managedFacultyIds) {
+                if (empty($managedFacultyIds)) {
+                    $q->whereRaw('0 = 1');
+                } else {
+                    $q->whereIn('faculty_id', $managedFacultyIds);
+                }
+            })
             ->when($term, fn($q) => $q->where('name', 'like', "%{$term}%"))
             ->orderBy('name')
             ->limit(25)
@@ -25,7 +37,7 @@ class TeacherController extends Controller
                 return [
                     'id'           => $t->id,
                     'name'         => $t->name,
-                    'nick_name'    => $t->nick_name,  // <-- Added
+                    'nick_name'    => $t->nick_name,
                     'faculty_code' => optional($t->faculty)->code,
                 ];
             })
@@ -34,7 +46,26 @@ class TeacherController extends Controller
 
     public function index(Request $request)
     {
-        $faculties = Faculty::orderBy('name')->get();
+    // 🔐 Current admin from middleware
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
+        // 🔽 Faculties for dropdowns (filter & create form)
+        $facultiesQuery = Faculty::orderBy('name');
+
+        // HOD → only their department faculties
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (!empty($managedFacultyIds)) {
+                $facultiesQuery->whereIn('id', $managedFacultyIds);
+            } else {
+                // no faculties mapped → show none
+                $facultiesQuery->whereRaw('0 = 1');
+            }
+        }
+
+        $faculties = $facultiesQuery->get();
 
         $filters = [
             'faculty_id' => $request->input('faculty_id'),
@@ -43,6 +74,15 @@ class TeacherController extends Controller
         ];
 
         $teachersQuery = Teacher::with('faculty')
+            // 🔐 HOD restriction on data
+            ->when($admin && $admin->isDepartmentAdmin(), function ($q) use ($managedFacultyIds) {
+                if (empty($managedFacultyIds)) {
+                    $q->whereRaw('0 = 1');
+                } else {
+                    $q->whereIn('faculty_id', $managedFacultyIds);
+                }
+            })
+            // ✅ Your existing filters
             ->when($filters['faculty_id'], fn($q, $fid) => $q->where('faculty_id', $fid))
             ->when($filters['status'] !== null && $filters['status'] !== '', function ($q) use ($filters) {
                 if ($filters['status'] == '1') $q->where('is_active', true);
@@ -67,20 +107,55 @@ class TeacherController extends Controller
         ));
     }
 
+
     public function store(Request $request)
     {
         $data = $this->validateData($request);
 
-        Teacher::create($data); // nick_name auto-generated in model
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
+        // 🔐 HOD cannot create teacher in other faculty
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (empty($managedFacultyIds) || !in_array($data['faculty_id'], $managedFacultyIds)) {
+                return back()
+                    ->withErrors(['faculty_id' => 'You are not allowed to assign this faculty.'])
+                    ->withInput();
+            }
+        }
+
+        Teacher::create($data);
 
         return redirect()
             ->route('admin.teachers.index', ['faculty_id' => $data['faculty_id']])
             ->with('ok', 'Teacher created successfully.');
     }
 
-    public function edit(Teacher $teacher)
+    public function edit(Request $request, Teacher $teacher)
     {
-        $faculties = Faculty::orderBy('name')->get();
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (empty($managedFacultyIds) || !in_array($teacher->faculty_id, $managedFacultyIds)) {
+                abort(403, 'You are not allowed to edit this teacher.');
+            }
+        }
+
+        // Faculties dropdown also restricted
+        $facultiesQuery = Faculty::orderBy('name');
+
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (!empty($managedFacultyIds)) {
+                $facultiesQuery->whereIn('id', $managedFacultyIds);
+            } else {
+                $facultiesQuery->whereRaw('0 = 1');
+            }
+        }
+
+        $faculties = $facultiesQuery->get();
 
         return view('Backend.admin.teachers.edit', compact(
             'teacher',
@@ -88,15 +163,29 @@ class TeacherController extends Controller
         ));
     }
 
+
     public function update(Request $request, Teacher $teacher)
     {
         $data = $this->validateData($request, $teacher->id);
+
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
+        // 🔐 HOD cannot move teacher to other faculty
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (empty($managedFacultyIds) || !in_array($data['faculty_id'], $managedFacultyIds)) {
+                return back()
+                    ->withErrors(['faculty_id' => 'You are not allowed to assign this faculty.'])
+                    ->withInput();
+            }
+        }
 
         if (empty($data['password'])) {
             unset($data['password']);
         }
 
-        $teacher->update($data); // nick_name auto-updated in model if required
+        $teacher->update($data);
 
         return redirect()
             ->route('admin.teachers.index', ['faculty_id' => $teacher->faculty_id])

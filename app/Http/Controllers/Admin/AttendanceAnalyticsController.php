@@ -16,34 +16,70 @@ class AttendanceAnalyticsController extends Controller
     /* ==============================
        MAIN DASHBOARD PAGE
        ============================== */
-  public function index(Request $request)
-{
-    $faculties = Faculty::orderBy('name')->get();
-    
-    // FETCH SECTIONS (Make sure Section model is imported at the top)
-    // We fetch all of them; the JavaScript will handle the filtering
-    $sections = Section::orderBy('name')->get(); 
+    public function index(Request $request)
+    {
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
 
-    $teachers  = DB::table('teachers')->orderBy('name')->get();
+        // Faculties visible in dropdown
+        $facultiesQuery = Faculty::orderBy('name');
 
-    $mode  = $request->get('mode', 'daily');
-    $today = Carbon::today();
-    $from  = $request->get('from');
-    $to    = $request->get('to');
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (!empty($managedFacultyIds)) {
+                $facultiesQuery->whereIn('id', $managedFacultyIds);
+            } else {
+                // No faculties mapped => show none (safe)
+                $facultiesQuery->whereRaw('0 = 1');
+            }
+        }
 
-    if (!$from || !$to) {
-        [$from, $to] = $this->defaultRange($mode, $today);
+        $faculties = $facultiesQuery->get();
+
+        // Sections (only from allowed faculties for HOD)
+        $sectionsQuery = Section::orderBy('name');
+
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (!empty($managedFacultyIds)) {
+                $sectionsQuery->whereIn('faculty_id', $managedFacultyIds);
+            } else {
+                $sectionsQuery->whereRaw('0 = 1');
+            }
+        }
+
+        $sections = $sectionsQuery->get();
+
+        // Teachers dropdown (only from allowed faculties for HOD)
+        $teachersQuery = DB::table('teachers')->orderBy('name');
+
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (!empty($managedFacultyIds)) {
+                $teachersQuery->whereIn('faculty_id', $managedFacultyIds);
+            } else {
+                $teachersQuery->whereRaw('0 = 1');
+            }
+        }
+
+        $teachers = $teachersQuery->get();
+
+        $mode  = $request->get('mode', 'daily');
+        $today = Carbon::today();
+        $from  = $request->get('from');
+        $to    = $request->get('to');
+
+        if (!$from || !$to) {
+            [$from, $to] = $this->defaultRange($mode, $today);
+        }
+
+        return view('Backend.dashboard.index', [
+            'faculties'   => $faculties,
+            'sections'    => $sections,
+            'teachers'    => $teachers,
+            'defaultMode' => $mode,
+            'defaultFrom' => $from,
+            'defaultTo'   => $to,
+        ]);
     }
-
-    return view('Backend.dashboard.index', [
-        'faculties'   => $faculties,
-        'sections'    => $sections, // <--- Add this
-        'teachers'    => $teachers,
-        'defaultMode' => $mode,
-        'defaultFrom' => $from,
-        'defaultTo'   => $to,
-    ]);
-}
 
     /* ==============================
        JSON DATA FOR DASHBOARD
@@ -52,6 +88,12 @@ class AttendanceAnalyticsController extends Controller
     {
         try {
             Log::info('Analytics data request started', ['params' => $request->all()]);
+
+            /** @var \App\Models\Admin|null $admin */
+            $admin = $request->attributes->get('admin');
+            $facultyScopeIds = ($admin && $admin->isDepartmentAdmin())
+                ? $admin->managedFacultyIds()
+                : [];
 
             $mode  = $request->get('mode', 'daily');
             $today = Carbon::today();
@@ -62,7 +104,7 @@ class AttendanceAnalyticsController extends Controller
                 [$from, $to] = $this->defaultRange($mode, $today);
             }
 
-            // Filters
+            // Filters from UI
             $facultyId = $request->get('faculty_id');
             $teacherId = $request->get('teacher_id');
             $studentId = $request->get('student_id');
@@ -72,9 +114,17 @@ class AttendanceAnalyticsController extends Controller
             $subjectId = $request->get('subject_id');
             $groupId   = $request->get('group_id');
 
+            // 🔐 If HOD: make sure selected faculty is within allowed faculties
+            if ($admin && $admin->isDepartmentAdmin()) {
+                if (!empty($facultyId) && !in_array($facultyId, $facultyScopeIds)) {
+                    // Invalid faculty selected → ignore that filter
+                    $facultyId = null;
+                }
+            }
+
             Log::info('Date range calculated', ['from' => $from, 'to' => $to]);
 
-            // Base attendance query (for global + trend)
+            // ---------- Base attendance query ----------
             $baseAttendance = $this->buildAttendanceQuery(
                 $from,
                 $to,
@@ -85,7 +135,8 @@ class AttendanceAnalyticsController extends Controller
                 $semester,
                 $batch,
                 $subjectId,
-                $groupId
+                $groupId,
+                $facultyScopeIds   // 🔐 DEPT SCOPE
             );
 
             Log::info('Base query built');
@@ -129,12 +180,12 @@ class AttendanceAnalyticsController extends Controller
 
             Log::info('Trend data retrieved', ['count' => $trendByDate->count()]);
 
-            // ---------- Breakdowns ----------
-            $byFaculty  = $this->getAttendanceByFaculty($from, $to, $facultyId, $sectionId, $semester, $subjectId, $groupId, $batch);
-            $byTeacher  = $this->getAttendanceByTeacher($from, $to, $facultyId, $teacherId, $sectionId, $semester, $subjectId, $batch, $groupId);
-            $bySubject  = $this->getAttendanceBySubject($from, $to, $facultyId, $sectionId, $semester, $subjectId, $batch, $groupId);
-            $bySection  = $this->getAttendanceBySection($from, $to, $facultyId, $sectionId, $semester, $batch, $groupId);
-            $byStudent  = $this->getAttendanceByStudent($from, $to, $facultyId, $studentId, $sectionId, $semester, $batch, $subjectId, $groupId);
+            // ---------- Breakdowns (all dept-scoped) ----------
+            $byFaculty  = $this->getAttendanceByFaculty($from, $to, $facultyId, $sectionId, $semester, $subjectId, $groupId, $batch, $facultyScopeIds);
+            $byTeacher  = $this->getAttendanceByTeacher($from, $to, $facultyId, $teacherId, $sectionId, $semester, $subjectId, $batch, $groupId, $facultyScopeIds);
+            $bySubject  = $this->getAttendanceBySubject($from, $to, $facultyId, $sectionId, $semester, $subjectId, $batch, $groupId, $facultyScopeIds);
+            $bySection  = $this->getAttendanceBySection($from, $to, $facultyId, $sectionId, $semester, $batch, $groupId, $facultyScopeIds);
+            $byStudent  = $this->getAttendanceByStudent($from, $to, $facultyId, $studentId, $sectionId, $semester, $batch, $subjectId, $groupId, $facultyScopeIds);
 
             // ---------- Class taught/not_taught ----------
             $taughtStats = $this->getTaughtStatistics(
@@ -144,7 +195,8 @@ class AttendanceAnalyticsController extends Controller
                 $teacherId,
                 $sectionId,
                 $semester,
-                $subjectId
+                $subjectId,
+                $facultyScopeIds  // 🔐
             );
 
             // ---------- Contradictions ----------
@@ -154,10 +206,11 @@ class AttendanceAnalyticsController extends Controller
                 $facultyId,
                 $sectionId,
                 $semester,
-                $subjectId
+                $subjectId,
+                $facultyScopeIds  // 🔐
             );
 
-            // ---------- Not taught details (for table) ----------
+            // ---------- Not taught details ----------
             $notTaughtDetails = $this->getNotTaughtDetails(
                 $from,
                 $to,
@@ -165,10 +218,11 @@ class AttendanceAnalyticsController extends Controller
                 $teacherId,
                 $sectionId,
                 $semester,
-                $subjectId
+                $subjectId,
+                $facultyScopeIds  // 🔐
             );
 
-            // ---------- Student timeline (if specific student selected) ----------
+            // ---------- Student timeline ----------
             $studentTimeline = [];
             if ($studentId) {
                 $studentTimeline = $this->getStudentTimeline(
@@ -178,7 +232,8 @@ class AttendanceAnalyticsController extends Controller
                     $facultyId,
                     $sectionId,
                     $semester,
-                    $subjectId
+                    $subjectId,
+                    $facultyScopeIds  // 🔐
                 );
             }
 
@@ -189,7 +244,8 @@ class AttendanceAnalyticsController extends Controller
                 $facultyId,
                 $sectionId,
                 $semester,
-                $batch
+                $batch,
+                $facultyScopeIds  // 🔐
             );
 
             Log::info('All data retrieved successfully');
@@ -259,7 +315,8 @@ class AttendanceAnalyticsController extends Controller
         $semester,
         $batch,
         $subjectId,
-        $groupId
+        $groupId,
+        array $facultyScopeIds = []   // 🔐 NEW
     ) {
         $query = DB::table('attendances')
             ->whereBetween('attendances.date', [$from, $to]);
@@ -272,13 +329,21 @@ class AttendanceAnalyticsController extends Controller
             $query->where('attendances.student_id', $studentId);
         }
 
-        // Join students when needed
-        if ($facultyId || $sectionId || $batch || $groupId) {
+        // Need students join if we filter by student faculty/section/batch/group
+        // or dept scope (HOD)
+        $needsStudentsJoin = $facultyId || $sectionId || $batch || $groupId || !empty($facultyScopeIds);
+
+        if ($needsStudentsJoin) {
             $query->join('students', 'attendances.student_id', '=', 'students.id');
 
             if ($facultyId) {
                 $query->where('students.faculty_id', $facultyId);
             }
+
+            if (!empty($facultyScopeIds)) {
+                $query->whereIn('students.faculty_id', $facultyScopeIds);
+            }
+
             if ($sectionId) {
                 $query->where('students.section_id', $sectionId);
             }
@@ -317,12 +382,17 @@ class AttendanceAnalyticsController extends Controller
         $semester,
         $subjectId,
         $groupId,
-        $batch
+        $batch,
+        array $facultyScopeIds = []  // 🔐
     ) {
         $query = DB::table('attendances')
             ->join('students', 'attendances.student_id', '=', 'students.id')
             ->join('faculties', 'students.faculty_id', '=', 'faculties.id')
             ->whereBetween('attendances.date', [$from, $to]);
+
+        if (!empty($facultyScopeIds)) {
+            $query->whereIn('students.faculty_id', $facultyScopeIds);
+        }
 
         if ($facultyId) $query->where('faculties.id', $facultyId);
         if ($sectionId) $query->where('students.section_id', $sectionId);
@@ -362,7 +432,8 @@ class AttendanceAnalyticsController extends Controller
         $semester,
         $subjectId,
         $batch,
-        $groupId
+        $groupId,
+        array $facultyScopeIds = []  // 🔐
     ) {
         $query = DB::table('attendances')
             ->join('teachers', 'attendances.teacher_id', '=', 'teachers.id')
@@ -370,8 +441,13 @@ class AttendanceAnalyticsController extends Controller
 
         if ($teacherId) $query->where('teachers.id', $teacherId);
 
-        if ($facultyId || $sectionId || $batch || $groupId) {
+        if ($facultyId || $sectionId || $batch || $groupId || !empty($facultyScopeIds)) {
             $query->join('students', 'attendances.student_id', '=', 'students.id');
+
+            if (!empty($facultyScopeIds)) {
+                $query->whereIn('students.faculty_id', $facultyScopeIds);
+            }
+
             if ($facultyId) $query->where('students.faculty_id', $facultyId);
             if ($sectionId) $query->where('students.section_id', $sectionId);
             if ($batch)    $query->where('students.batch', $batch);
@@ -409,7 +485,8 @@ class AttendanceAnalyticsController extends Controller
         $semester,
         $subjectId,
         $batch,
-        $groupId
+        $groupId,
+        array $facultyScopeIds = []  // 🔐
     ) {
         $query = DB::table('attendances')
             ->join('routines', 'attendances.routine_id', '=', 'routines.id')
@@ -419,8 +496,13 @@ class AttendanceAnalyticsController extends Controller
         if ($subjectId) $query->where('subjects.id', $subjectId);
         if ($semester)  $query->where('routines.semester', $semester);
 
-        if ($facultyId || $sectionId || $batch || $groupId) {
+        if ($facultyId || $sectionId || $batch || $groupId || !empty($facultyScopeIds)) {
             $query->join('students', 'attendances.student_id', '=', 'students.id');
+
+            if (!empty($facultyScopeIds)) {
+                $query->whereIn('students.faculty_id', $facultyScopeIds);
+            }
+
             if ($facultyId) $query->where('students.faculty_id', $facultyId);
             if ($sectionId) $query->where('students.section_id', $sectionId);
             if ($batch)    $query->where('students.batch', $batch);
@@ -455,12 +537,17 @@ class AttendanceAnalyticsController extends Controller
         $sectionId,
         $semester,
         $batch,
-        $groupId
+        $groupId,
+        array $facultyScopeIds = []  // 🔐
     ) {
         $query = DB::table('attendances')
             ->join('students', 'attendances.student_id', '=', 'students.id')
             ->join('sections', 'students.section_id', '=', 'sections.id')
             ->whereBetween('attendances.date', [$from, $to]);
+
+        if (!empty($facultyScopeIds)) {
+            $query->whereIn('students.faculty_id', $facultyScopeIds);
+        }
 
         if ($facultyId) $query->where('students.faculty_id', $facultyId);
         if ($sectionId) $query->where('sections.id', $sectionId);
@@ -499,12 +586,17 @@ class AttendanceAnalyticsController extends Controller
         $semester,
         $batch,
         $subjectId,
-        $groupId
+        $groupId,
+        array $facultyScopeIds = []  // 🔐
     ) {
         $query = DB::table('attendances')
             ->join('students', 'attendances.student_id', '=', 'students.id')
             ->leftJoin('sections', 'students.section_id', '=', 'sections.id')
             ->whereBetween('attendances.date', [$from, $to]);
+
+        if (!empty($facultyScopeIds)) {
+            $query->whereIn('students.faculty_id', $facultyScopeIds);
+        }
 
         if ($studentId) $query->where('students.id', $studentId);
         if ($facultyId) $query->where('students.faculty_id', $facultyId);
@@ -542,12 +634,27 @@ class AttendanceAnalyticsController extends Controller
             ->get();
     }
 
-protected function getTaughtStatistics(
-        $from, $to, $facultyId, $teacherId, $sectionId, $semester, $subjectId
+    /* ==============================
+       TAUGHT / NOT TAUGHT
+       ============================== */
+    protected function getTaughtStatistics(
+        $from,
+        $to,
+        $facultyId,
+        $teacherId,
+        $sectionId,
+        $semester,
+        $subjectId,
+        array $facultyScopeIds = []   // 🔐
     ) {
         $query = DB::table('routine_feedback as rf')
             ->join('routines as r', 'rf.routine_id', '=', 'r.id')
             ->whereBetween('rf.class_date', [$from, $to]);
+
+        // Dept scope
+        if (!empty($facultyScopeIds)) {
+            $query->whereIn('r.faculty_id', $facultyScopeIds);
+        }
 
         // Apply filters
         if ($teacherId) $query->where('r.teacher_id', $teacherId);
@@ -556,14 +663,12 @@ protected function getTaughtStatistics(
         if ($semester)  $query->where('r.semester', $semester);
         if ($subjectId) $query->where('r.subject_id', $subjectId);
 
-        // LOGIC CHANGE: 
-        // We create a unique signature for a "Session": Date + Subject + Group + Section
-        // This ensures 3 periods of "Computer Programming (Group A)" on Friday count as 1.
+        // Unique session signature
         $sessionSignature = "CONCAT(
             rf.class_date, '_', 
             r.subject_id, '_', 
             r.section_id, '_', 
-            COALESCE(r.group, 'ALL')
+            COALESCE(r.`group`, 'ALL')
         )";
 
         $result = $query
@@ -597,7 +702,8 @@ protected function getTaughtStatistics(
         $facultyId,
         $sectionId,
         $semester,
-        $subjectId
+        $subjectId,
+        array $facultyScopeIds = []   // 🔐
     ) {
         // Common attendance aggregate: per routine + date
         $attendanceAgg = DB::table('attendances')
@@ -617,6 +723,10 @@ protected function getTaughtStatistics(
             ->leftJoin('sections', 'r.section_id', '=', 'sections.id')
             ->leftJoin('faculties', 'r.faculty_id', '=', 'faculties.id')
             ->whereBetween('rf.class_date', [$from, $to]);
+
+        if (!empty($facultyScopeIds)) {
+            $q1->whereIn('r.faculty_id', $facultyScopeIds);
+        }
 
         if ($facultyId) $q1->where('r.faculty_id', $facultyId);
         if ($sectionId) $q1->where('r.section_id', $sectionId);
@@ -661,6 +771,10 @@ protected function getTaughtStatistics(
             ->whereBetween('ac.date', [$from, $to])
             ->whereNull('rf.id'); // attendance but no CR feedback
 
+        if (!empty($facultyScopeIds)) {
+            $q2->whereIn('r.faculty_id', $facultyScopeIds);
+        }
+
         if ($facultyId) $q2->where('r.faculty_id', $facultyId);
         if ($sectionId) $q2->where('r.section_id', $sectionId);
         if ($semester)  $q2->where('r.semester', $semester);
@@ -703,17 +817,14 @@ protected function getTaughtStatistics(
             } elseif ($status === 'not_taught' && $att > 0) {
                 $c->issue_type = 'Marked "not taught" but attendance exists';
             } elseif (is_null($status) && $att > 0) {
-                // TEACHER did attendance; CR did nothing
                 $c->issue_type = 'Attendance recorded but CR/VCR did not set taught/not_taught';
             }
         }
 
-        // Keep only contradictions
+        // Collapse duplicates
         $contradictions = collect($classes)
             ->filter(fn ($c) => isset($c->issue_type));
 
-        // Collapse duplicates:
-        // one row per (date + subject + teacher + section + semester + group)
         $grouped = $contradictions->groupBy(function ($c) {
             return implode('|', [
                 $c->class_date,
@@ -747,7 +858,8 @@ protected function getTaughtStatistics(
         $teacherId,
         $sectionId,
         $semester,
-        $subjectId
+        $subjectId,
+        array $facultyScopeIds = []   // 🔐
     ) {
         $query = DB::table('routine_feedback as rf')
             ->join('routines as r', 'rf.routine_id', '=', 'r.id')
@@ -757,6 +869,10 @@ protected function getTaughtStatistics(
             ->leftJoin('sections', 'r.section_id', '=', 'sections.id')
             ->whereBetween('rf.class_date', [$from, $to])
             ->where('rf.status', 'not_taught');
+
+        if (!empty($facultyScopeIds)) {
+            $query->whereIn('r.faculty_id', $facultyScopeIds);
+        }
 
         if ($facultyId) $query->where('r.faculty_id', $facultyId);
         if ($teacherId) $query->where('r.teacher_id', $teacherId);
@@ -807,14 +923,19 @@ protected function getTaughtStatistics(
         $facultyId,
         $sectionId,
         $semester,
-        $subjectId
+        $subjectId,
+        array $facultyScopeIds = []   // 🔐
     ) {
         $query = DB::table('attendances')
             ->where('student_id', $studentId)
             ->whereBetween('date', [$from, $to]);
 
-        if ($facultyId || $sectionId || $semester || $subjectId) {
+        if ($facultyId || $sectionId || $semester || $subjectId || !empty($facultyScopeIds)) {
             $query->join('routines', 'attendances.routine_id', '=', 'routines.id');
+
+            if (!empty($facultyScopeIds)) {
+                $query->whereIn('routines.faculty_id', $facultyScopeIds);
+            }
 
             if ($facultyId) $query->where('routines.faculty_id', $facultyId);
             if ($sectionId) $query->where('routines.section_id', $sectionId);
@@ -837,19 +958,18 @@ protected function getTaughtStatistics(
     /* ==============================
        CROSS-SUBJECT CONTRAST
        ============================== */
-   protected function getSubjectContrast(
+    protected function getSubjectContrast(
         $from,
         $to,
         $facultyId,
         $sectionId,
         $semester,
-        $batch
+        $batch,
+        array $facultyScopeIds = []   // 🔐
     ) {
-        // Query: Find subjects that students are skipping while present in others on the same day
         $query = DB::table('attendances as a_abs')
             ->join('routines as r_abs', 'a_abs.routine_id', '=', 'r_abs.id')
             ->join('subjects as s', 'r_abs.subject_id', '=', 's.id')
-            // Self-join to find where they WERE present on the same day
             ->join('attendances as a_pres', function ($join) {
                 $join->on('a_abs.student_id', '=', 'a_pres.student_id')
                      ->on('a_abs.date', '=', 'a_pres.date');
@@ -858,20 +978,23 @@ protected function getTaughtStatistics(
             ->whereBetween('a_abs.date', [$from, $to])
             ->where('a_abs.status', 'A')      // Absent here
             ->where('a_pres.status', 'P')     // Present somewhere else
-            ->whereColumn('r_abs.subject_id', '!=', 'r_pres.subject_id'); // Different subject
+            ->whereColumn('r_abs.subject_id', '!=', 'r_pres.subject_id');
 
-        // Apply Filters
-        if ($facultyId) {
-            $query->join('students', 'a_abs.student_id', '=', 'students.id')
-                  ->where('students.faculty_id', $facultyId);
-            
+        // Dept scope via students
+        if ($facultyId || !empty($facultyScopeIds) || $sectionId || $batch) {
+            $query->join('students', 'a_abs.student_id', '=', 'students.id');
+
+            if (!empty($facultyScopeIds)) {
+                $query->whereIn('students.faculty_id', $facultyScopeIds);
+            }
+
+            if ($facultyId) $query->where('students.faculty_id', $facultyId);
             if ($sectionId) $query->where('students.section_id', $sectionId);
             if ($batch)     $query->where('students.batch', $batch);
         }
 
         if ($semester) $query->where('r_abs.semester', $semester);
 
-        // Group by the Subject being Skipped
         return $query
             ->selectRaw('
                 s.code as subject_code,
@@ -891,7 +1014,7 @@ protected function getTaughtStatistics(
     protected function defaultRange($mode, $today)
     {
         $to = $today->format('Y-m-d');
-        
+
         switch ($mode) {
             case 'weekly':
                 $from = $today->copy()->startOfWeek()->format('Y-m-d');
@@ -909,7 +1032,7 @@ protected function getTaughtStatistics(
     }
 
     /* ==============================
-       EXPORT CSV
+       EXPORT CSV (also HOD-scoped)
        ============================== */
     public function export(Request $request)
     {
@@ -922,14 +1045,26 @@ protected function getTaughtStatistics(
             [$from, $to] = $this->defaultRange($mode, $today);
         }
 
-        $rows = DB::table('attendances')
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $facultyScopeIds = ($admin && $admin->isDepartmentAdmin())
+            ? $admin->managedFacultyIds()
+            : [];
+
+        $rowsQuery = DB::table('attendances')
             ->join('students', 'attendances.student_id', '=', 'students.id')
             ->join('teachers', 'attendances.teacher_id', '=', 'teachers.id')
             ->join('routines', 'attendances.routine_id', '=', 'routines.id')
             ->leftJoin('subjects', 'routines.subject_id', '=', 'subjects.id')
             ->leftJoin('faculties', 'students.faculty_id', '=', 'faculties.id')
             ->leftJoin('sections', 'students.section_id', '=', 'sections.id')
-            ->whereBetween('attendances.date', [$from, $to])
+            ->whereBetween('attendances.date', [$from, $to]);
+
+        if (!empty($facultyScopeIds)) {
+            $rowsQuery->whereIn('students.faculty_id', $facultyScopeIds);
+        }
+
+        $rows = $rowsQuery
             ->select([
                 'attendances.date',
                 'faculties.code as faculty_code',
@@ -967,31 +1102,61 @@ protected function getTaughtStatistics(
     }
 
     /* ==============================
-       SMALL JSON ENDPOINTS
+       SMALL JSON ENDPOINTS (HOD-safe)
        ============================== */
 
     public function sections(Request $request)
     {
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
         $facultyId = $request->get('faculty_id');
 
-        if (!$facultyId) {
-            return response()->json([]);
+        if ($admin && $admin->isDepartmentAdmin()) {
+            // HOD: limit to dept faculties
+            if (!empty($facultyId) && !in_array($facultyId, $managedFacultyIds)) {
+                return response()->json([]); // not allowed
+            }
+
+            $query = Section::orderBy('name');
+
+            if (!empty($facultyId)) {
+                $query->where('faculty_id', $facultyId);
+            } else {
+                $query->whereIn('faculty_id', $managedFacultyIds);
+            }
+        } else {
+            // Super admin: original behaviour
+            if (!$facultyId) {
+                return response()->json([]);
+            }
+
+            $query = Section::where('faculty_id', $facultyId)
+                ->orderBy('name');
         }
 
-        $sections = Section::where('faculty_id', $facultyId)
-            ->orderBy('name')
-            ->get(['id', 'name']);
+        $sections = $query->get(['id', 'name']);
 
         return response()->json($sections);
     }
 
     public function subjects(Request $request)
     {
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
         $facultyId = $request->get('faculty_id');
         $semester  = $request->get('semester');
         $batch     = $request->get('batch'); // NEW/OLD or 1/2
 
         if (!$facultyId || !$semester) {
+            return response()->json([]);
+        }
+
+        // HOD protection
+        if ($admin && $admin->isDepartmentAdmin() && !in_array($facultyId, $managedFacultyIds)) {
             return response()->json([]);
         }
 
@@ -1026,13 +1191,32 @@ protected function getTaughtStatistics(
 
     public function students(Request $request)
     {
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
         $facultyId = $request->get('faculty_id');
         $sectionId = $request->get('section_id');
         $groupId   = $request->get('group_id');
 
         $query = Student::query();
 
-        if ($facultyId) $query->where('faculty_id', $facultyId);
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (!empty($managedFacultyIds)) {
+                $query->whereIn('faculty_id', $managedFacultyIds);
+            } else {
+                // no faculties => nothing
+                return response()->json([]);
+            }
+
+            if ($facultyId && in_array($facultyId, $managedFacultyIds)) {
+                $query->where('faculty_id', $facultyId);
+            }
+        } else {
+            // super admin
+            if ($facultyId) $query->where('faculty_id', $facultyId);
+        }
+
         if ($sectionId) $query->where('section_id', $sectionId);
         if ($groupId)   $query->where('group_id', $groupId);
 
@@ -1045,6 +1229,10 @@ protected function getTaughtStatistics(
 
     public function teachers(Request $request)
     {
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
         $facultyId = $request->get('faculty_id');
         $sectionId = $request->get('section_id');
         $semester  = $request->get('semester');
@@ -1053,7 +1241,20 @@ protected function getTaughtStatistics(
         $query = DB::table('teachers')
             ->join('routines', 'routines.teacher_id', '=', 'teachers.id');
 
-        if ($facultyId) $query->where('routines.faculty_id', $facultyId);
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (!empty($managedFacultyIds)) {
+                $query->whereIn('routines.faculty_id', $managedFacultyIds);
+            } else {
+                return response()->json([]);
+            }
+
+            if ($facultyId && in_array($facultyId, $managedFacultyIds)) {
+                $query->where('routines.faculty_id', $facultyId);
+            }
+        } else {
+            if ($facultyId) $query->where('routines.faculty_id', $facultyId);
+        }
+
         if ($sectionId) $query->where('routines.section_id', $sectionId);
         if ($semester)  $query->where('routines.semester', $semester);
         if ($subjectId) $query->where('routines.subject_id', $subjectId);
@@ -1065,6 +1266,4 @@ protected function getTaughtStatistics(
 
         return response()->json($teachers);
     }
-
-    
 }

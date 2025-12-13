@@ -18,12 +18,10 @@ class DatabaseSeeder extends Seeder
         //     'name' => 'Test User',
         //     'email' => 'test@example.com',
         // ]);
-            $this->call(class: AdminSeeder::class);
-             $this->call([
-        PeriodSeeder::class,
-    ]);
-            $this->call(class: DemoSeeder::class);
-          
-
+        $this->call(class: AdminSeeder::class);
+        $this->call([
+            PeriodSeeder::class,
+        ]);
+       
     }
 }

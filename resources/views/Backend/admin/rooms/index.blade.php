@@ -26,11 +26,7 @@
           <thead class="bg-gray-50 text-gray-700">
             <tr>
               <th class="px-4 py-3 text-left font-semibold">Room</th>
-              <th class="px-4 py-3 text-left font-semibold">Col1</th>
-              <th class="px-4 py-3 text-left font-semibold">Col2</th>
-              <th class="px-4 py-3 text-left font-semibold">Col3</th>
-              <th class="px-4 py-3 text-left font-semibold">Benches</th>
-              <th class="px-4 py-3 text-left font-semibold">Seats</th>
+
               <th class="px-4 py-3 text-left font-semibold">Fac/Room</th>
               <th class="px-4 py-3"></th>
             </tr>
@@ -39,12 +35,6 @@
             @forelse($rooms as $r)
               <tr class="hover:bg-gray-50">
                 <td class="px-4 py-2">{{ $r->room_no }}</td>
-                <td class="px-4 py-2">{{ $r->rows_col1 }}</td>
-                <td class="px-4 py-2">{{ $r->rows_col2 }}</td>
-                <td class="px-4 py-2">{{ $r->rows_col3 }}</td>
-                <td class="px-4 py-2">{{ $r->computed_total_benches }}</td>
-                <td class="px-4 py-2">{{ $r->computed_total_seats }}</td>
-                <td class="px-4 py-2">{{ $r->faculties_per_room }}</td>
                 <td class="px-4 py-2 text-right">
                   <button
                     class="inline-flex items-center rounded-lg border px-3 py-1.5 text-xs font-medium hover:bg-gray-50"
@@ -68,48 +58,52 @@
       </div>
     </div>
 
-    {{-- Create/Edit form --}}
-    <div>
-      <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+   {{-- Create/Edit form --}}
+<div>
+    <div class="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm relative">
+
+        {{-- IF NOT SUPER ADMIN → show lock overlay --}}
+        @if(!$authAdmin->is_super_admin)
+            <div class="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center z-20 rounded-2xl">
+                <div class="text-center">
+                    <div class="text-lg font-bold text-red-600">Restricted</div>
+                    <div class="text-sm text-gray-700">Only Super Admin can create or modify rooms.</div>
+                </div>
+            </div>
+        @endif
+
         <h2 id="roomFormTitle" class="text-lg font-semibold">Add Room</h2>
-        <form method="POST" id="roomForm" action="{{ route('rooms.store') }}" class="mt-4 space-y-3">
-          @csrf
-          <input type="hidden" name="_method" id="roomFormMethod" value="POST">
-          <input type="hidden" name="id" id="room_id">
 
-          <div>
-            <label class="block text-xs text-gray-600 mb-1">Room No</label>
-            <input name="room_no" id="room_no" class="w-full rounded-lg border px-3 py-2" required>
-          </div>
+        <form method="POST" id="roomForm" action="{{ route('rooms.store') }}"
+              class="mt-4 space-y-3 {{ !$authAdmin->is_super_admin ? 'pointer-events-none opacity-40' : '' }}">
+            @csrf
 
-          <div class="grid grid-cols-3 gap-3">
+            <input type="hidden" name="_method" id="roomFormMethod" value="POST">
+            <input type="hidden" name="id" id="room_id">
+
             <div>
-              <label class="block text-xs text-gray-600 mb-1">Rows (Col 1)</label>
-              <input type="number" min="0" name="rows_col1" id="rows_col1" class="w-full rounded-lg border px-3 py-2" required>
+                <label class="block text-xs text-gray-600 mb-1">Room No</label>
+                <input name="room_no" id="room_no" class="w-full rounded-lg border px-3 py-2" required>
             </div>
-            <div>
-              <label class="block text-xs text-gray-600 mb-1">Rows (Col 2)</label>
-              <input type="number" min="0" name="rows_col2" id="rows_col2" class="w-full rounded-lg border px-3 py-2" required>
-            </div>
-            <div>
-              <label class="block text-xs text-gray-600 mb-1">Rows (Col 3)</label>
-              <input type="number" min="0" name="rows_col3" id="rows_col3" class="w-full rounded-lg border px-3 py-2" required>
-            </div>
-          </div>
 
-          <div>
-            <label class="block text-xs text-gray-600 mb-1">Faculties per Room (constant)</label>
-            <input type="number" min="1" max="5" name="faculties_per_room" id="faculties_per_room" class="w-full rounded-lg border px-3 py-2" required>
-          </div>
+            {{-- Other fields (rows, col, bench count) if needed --}}
+            {{-- Add your fields here --}}
 
-          <div class="pt-2 flex items-center justify-between">
-            <button class="rounded-xl bg-gray-900 text-white px-4 py-2 text-sm font-semibold hover:bg-gray-800">Save</button>
-            <button type="button" onclick="resetRoomForm()"
-              class="rounded-xl border px-4 py-2 text-sm">Clear</button>
-          </div>
+            @if($authAdmin->is_super_admin)
+                <div class="pt-2 flex items-center justify-between">
+                    <button class="rounded-xl bg-gray-900 text-white px-4 py-2 text-sm font-semibold hover:bg-gray-800">
+                        Save
+                    </button>
+                    <button type="button" onclick="resetRoomForm()" class="rounded-xl border px-4 py-2 text-sm">
+                        Clear
+                    </button>
+                </div>
+            @endif
+
         </form>
-      </div>
     </div>
+</div>
+
   </div>
 </div>
 

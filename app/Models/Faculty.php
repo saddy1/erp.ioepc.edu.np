@@ -24,4 +24,10 @@ public function sections()
 {
     return $this->hasMany(Section::class);
 }
+public function departments()
+{
+    return $this->belongsToMany(Department::class, 'department_faculty');
+}
+
+
 }

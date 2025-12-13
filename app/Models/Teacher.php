@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 
 class Teacher extends Model
 {
@@ -73,5 +74,48 @@ public static function makeNick($name)
 
     return implode('', $letters); // e.g. SKP
 }
+
+
+// app/Models/Teacher.php
+
+public function departmentRoles()
+{
+    return $this->hasMany(DepartmentTeacherRole::class);
+}
+
+public function hodDepartments()
+{
+    return $this->belongsToMany(Department::class, 'department_teacher_roles')
+        ->wherePivot('role', 'hod');
+}
+
+public function deputyDepartments()
+{
+    return $this->belongsToMany(Department::class, 'department_teacher_roles')
+        ->wherePivot('role', 'deputy_hod');
+}
+
+/**
+ * Faculties that this teacher manages as HOD or Deputy HOD.
+ * Used for permissions: routines, students, teachers, analytics.
+ */
+public function managedFacultyIds(): array
+{
+    $deptIds = $this->departmentRoles()
+        ->pluck('department_id')
+        ->unique()
+        ->toArray();
+
+    if (empty($deptIds)) {
+        return [];
+    }
+
+    return \DB::table('department_faculty')
+        ->whereIn('department_id', $deptIds)
+        ->pluck('faculty_id')
+        ->unique()
+        ->toArray();
+}
+
 
 }

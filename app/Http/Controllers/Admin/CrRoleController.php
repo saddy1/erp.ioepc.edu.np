@@ -15,17 +15,41 @@ class CrRoleController extends Controller
     /**
      * Show filter form + students of selected section/batch
      */
-  
-public function index(Request $request)
+    public function index(Request $request)
     {
-        $faculties = Faculty::orderBy('code')->get();
-        $years     = [1, 2, 3, 4,5];             // adjust if your project uses different
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
+        // 🔐 Faculties filtered by role
+        $facultiesQuery = Faculty::orderBy('code');
+
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (!empty($managedFacultyIds)) {
+                $facultiesQuery->whereIn('id', $managedFacultyIds);
+            } else {
+                // no faculties mapped for this HOD
+                $facultiesQuery->whereRaw('0 = 1');
+            }
+        }
+
+        $faculties = $facultiesQuery->get();
+
+        $years     = [1, 2, 3, 4, 5];               // adjust if needed
         $semesters = [1,2,3,4,5,6,7,8,9,10];        // adjust to your pattern
 
         $facultyId      = $request->input('faculty_id');
         $sectionId      = $request->input('section_id');
         $selectedYear   = $request->input('year');
         $selectedSem    = $request->input('semester');
+
+        // 🔐 If HOD and selected faculty is not in managed list → ignore it
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if ($facultyId && !in_array($facultyId, $managedFacultyIds)) {
+                $facultyId = null;
+                $sectionId = null;
+            }
+        }
 
         $selectedFaculty = null;
         $selectedSection = null;
@@ -45,9 +69,16 @@ public function index(Request $request)
 
         // If full filter selected -> load students + CR/VCR
         if ($facultyId && $sectionId && $selectedYear && $selectedSem) {
-            $selectedSection = Section::where('faculty_id', $facultyId)
-                ->where('id', $sectionId)
-                ->first();
+            // Extra safety for HOD: section must belong to allowed faculties
+            if ($admin && $admin->isDepartmentAdmin()) {
+                $selectedSection = Section::where('id', $sectionId)
+                    ->whereIn('faculty_id', $managedFacultyIds)
+                    ->first();
+            } else {
+                $selectedSection = Section::where('faculty_id', $facultyId)
+                    ->where('id', $sectionId)
+                    ->first();
+            }
 
             if ($selectedSection) {
                 // students come from students table (year+sem)
@@ -94,102 +125,125 @@ public function index(Request $request)
     /**
      * Save CR and VCR for given faculty + section + batch
      */
-public function save(Request $request)
-{
-    $data = $request->validate([
-        'faculty_id'     => ['required', 'exists:faculties,id'],
-        'section_id'     => ['required', 'exists:sections,id'],
-        'year'           => ['required', 'integer', 'min:1'],
-        'semester'       => ['required', 'integer', 'min:1'],
-        'cr_student_id'  => ['nullable', 'exists:students,id'],
-        'vcr_student_id' => ['nullable', 'exists:students,id'],
+    public function save(Request $request)
+    {
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
 
-        'cr_password'    => ['nullable', 'string', 'min:6'],
-        'vcr_password'   => ['nullable', 'string', 'min:6'],
-    ]);
+        $data = $request->validate([
+            'faculty_id'     => ['required', 'exists:faculties,id'],
+            'section_id'     => ['required', 'exists:sections,id'],
+            'year'           => ['required', 'integer', 'min:1'],
+            'semester'       => ['required', 'integer', 'min:1'],
+            'cr_student_id'  => ['nullable', 'exists:students,id'],
+            'vcr_student_id' => ['nullable', 'exists:students,id'],
 
-    // CR and VCR cannot be the same
-    if (!empty($data['cr_student_id']) && !empty($data['vcr_student_id']) &&
-        $data['cr_student_id'] == $data['vcr_student_id']
-    ) {
-        return back()->withInput()->with('error', 'CR and VCR cannot be the same student.');
-    }
+            'cr_password'    => ['nullable', 'string', 'min:6'],
+            'vcr_password'   => ['nullable', 'string', 'min:6'],
+        ]);
 
-    // Valid students in this faculty + section + year + sem
-    $validIds = Student::where('faculty_id', $data['faculty_id'])
-        ->where('section_id', $data['section_id'])
-        ->where('year', (int)$data['year'])
-        ->where('semester', (int)$data['semester'])
-        ->pluck('id')
-        ->all();
+        // 🔐 HOD security: can only manage faculties/sections in their department
+        if ($admin && $admin->isDepartmentAdmin()) {
+            // faculty must be in managed list
+            if (empty($managedFacultyIds) || !in_array($data['faculty_id'], $managedFacultyIds)) {
+                return back()
+                    ->withInput()
+                    ->with('error', 'You are not allowed to manage CR / VCR for this faculty.');
+            }
 
-    foreach (['cr_student_id', 'vcr_student_id'] as $key) {
-        if (!empty($data[$key]) && !in_array($data[$key], $validIds)) {
-            return back()->withInput()->with(
-                'error',
-                strtoupper(str_replace('_student_id', '', $key)).' does not belong to this year/semester/section.'
-            );
+            // section must also belong to allowed faculties
+            $section = Section::where('id', $data['section_id'])
+                ->whereIn('faculty_id', $managedFacultyIds)
+                ->first();
+
+            if (!$section) {
+                return back()
+                    ->withInput()
+                    ->with('error', 'You are not allowed to manage CR / VCR for this section.');
+            }
         }
-    }
 
-    // Delete old roles for this section + year + sem
-    StudentRole::where('section_id', $data['section_id'])
-        ->where('year', (int)$data['year'])
-        ->where('semester', (int)$data['semester'])
-        ->delete();
+        // CR and VCR cannot be the same
+        if (!empty($data['cr_student_id']) && !empty($data['vcr_student_id']) &&
+            $data['cr_student_id'] == $data['vcr_student_id']
+        ) {
+            return back()->withInput()->with('error', 'CR and VCR cannot be the same student.');
+        }
 
-    // Reset can_login for all students in this context (optional but strict)
-    Student::whereIn('id', $validIds)->update(['can_login' => false]);
+        // Valid students in this faculty + section + year + sem
+        $validIds = Student::where('faculty_id', $data['faculty_id'])
+            ->where('section_id', $data['section_id'])
+            ->where('year', (int)$data['year'])
+            ->where('semester', (int)$data['semester'])
+            ->pluck('id')
+            ->all();
 
-    // helper: set login + optionally password + must_change_password
- $ensureLogin = function (int $studentId, ?string $plainPassword = null) {
-    $student = Student::find($studentId);
-    if (!$student) return;
+        foreach (['cr_student_id', 'vcr_student_id'] as $key) {
+            if (!empty($data[$key]) && !in_array($data[$key], $validIds)) {
+                return back()->withInput()->with(
+                    'error',
+                    strtoupper(str_replace('_student_id', '', $key)).' does not belong to this year/semester/section.'
+                );
+            }
+        }
 
-    $updates = ['can_login' => true];
+        // Delete old roles for this section + year + sem
+        StudentRole::where('section_id', $data['section_id'])
+            ->where('year', (int)$data['year'])
+            ->where('semester', (int)$data['semester'])
+            ->delete();
 
-    if ($plainPassword !== null && $plainPassword !== '') {
-        // ✅ assign plain text, mutator will Hash::make() it
-        $updates['password']             = $plainPassword;
-        $updates['must_change_password'] = true;
-    }
+        // Reset can_login for all students in this context (strict)
+        Student::whereIn('id', $validIds)->update(['can_login' => false]);
 
-    $student->update($updates);
-};
+        // helper: set login + optionally password + must_change_password
+        $ensureLogin = function (int $studentId, ?string $plainPassword = null) {
+            $student = Student::find($studentId);
+            if (!$student) return;
 
+            $updates = ['can_login' => true];
 
-    // Create CR
-    if (!empty($data['cr_student_id'])) {
-        StudentRole::create([
-            'student_id' => $data['cr_student_id'],
+            if ($plainPassword !== null && $plainPassword !== '') {
+                // 🔐 assign plain text; mutator will Hash::make()
+                $updates['password']             = $plainPassword;
+                $updates['must_change_password'] = true;
+            }
+
+            $student->update($updates);
+        };
+
+        // Create CR
+        if (!empty($data['cr_student_id'])) {
+            StudentRole::create([
+                'student_id' => $data['cr_student_id'],
+                'section_id' => $data['section_id'],
+                'year'       => (int)$data['year'],
+                'semester'   => (int)$data['semester'],
+                'role'       => 'CR',
+            ]);
+
+            $ensureLogin((int)$data['cr_student_id'], $data['cr_password'] ?? null);
+        }
+
+        // Create VCR
+        if (!empty($data['vcr_student_id'])) {
+            StudentRole::create([
+                'student_id' => $data['vcr_student_id'],
+                'section_id' => $data['section_id'],
+                'year'       => (int)$data['year'],
+                'semester'   => (int)$data['semester'],
+                'role'       => 'VCR',
+            ]);
+
+            $ensureLogin((int)$data['vcr_student_id'], $data['vcr_password'] ?? null);
+        }
+
+        return redirect()->route('admin.cr_roles.index', [
+            'faculty_id' => $data['faculty_id'],
             'section_id' => $data['section_id'],
-            'year'       => (int)$data['year'],
-            'semester'   => (int)$data['semester'],
-            'role'       => 'CR',
-        ]);
-
-        $ensureLogin((int)$data['cr_student_id'], $data['cr_password'] ?? null);
+            'year'       => $data['year'],
+            'semester'   => $data['semester'],
+        ])->with('ok', 'CR / VCR updated successfully.');
     }
-
-    // Create VCR
-    if (!empty($data['vcr_student_id'])) {
-        StudentRole::create([
-            'student_id' => $data['vcr_student_id'],
-            'section_id' => $data['section_id'],
-            'year'       => (int)$data['year'],
-            'semester'   => (int)$data['semester'],
-            'role'       => 'VCR',
-        ]);
-
-        $ensureLogin((int)$data['vcr_student_id'], $data['vcr_password'] ?? null);
-    }
-
-    return redirect()->route('admin.cr_roles.index', [
-        'faculty_id' => $data['faculty_id'],
-        'section_id' => $data['section_id'],
-        'year'       => $data['year'],
-        'semester'   => $data['semester'],
-    ])->with('ok', 'CR / VCR updated successfully.');
-}
-
 }

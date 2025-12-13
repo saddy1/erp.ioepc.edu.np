@@ -18,40 +18,65 @@ class RoutineController extends Controller
 {
     public function index(Request $request)
     {
-        // 1) Master lists
-        $faculties = Faculty::orderBy('name')->get();
-        $batches   = Student::select('batch')
+        // 🔐 Current admin from middleware
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
+        // 1) Master lists (faculties are scoped for HOD/department admin)
+        $facultiesQuery = Faculty::orderBy('name');
+
+        $facultiesQuery->when($admin && $admin->isDepartmentAdmin(), function ($q) use ($managedFacultyIds) {
+            if (empty($managedFacultyIds)) {
+                $q->whereRaw('0 = 1'); // safe: no access
+            } else {
+                $q->whereIn('id', $managedFacultyIds);
+            }
+        });
+
+        $faculties = $facultiesQuery->get();
+
+        $batches = Student::select('batch')
             ->distinct()
             ->orderBy('batch', 'desc')
             ->pluck('batch');
-        $semesters = [1, 2, 3, 4, 5, 6, 7, 8,9,10];
-     
+
+        $semesters = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
         // 2) Filters from query
         $filters = [
-            'faculty_id' => $request->input('faculty_id'),
-            'batch'      => $request->input('batch'),
-          
-            'semester'   => $request->input('semester'),
-            'section_id' => $request->input('section_id'),
-            'day_of_week' => $request->input('day_of_week'),
-            'teacher_id' => $request->input('teacher_id'),
-            'shift'      => $request->input('shift'),
-            'subject_batch'  => $request->input('subject_batch'),
+            'faculty_id'   => $request->input('faculty_id'),
+            'batch'        => $request->input('batch'),
+            'semester'     => $request->input('semester'),
+            'section_id'   => $request->input('section_id'),
+            'day_of_week'  => $request->input('day_of_week'),
+            'teacher_id'   => $request->input('teacher_id'),
+            'shift'        => $request->input('shift'),
+            'subject_batch'=> $request->input('subject_batch'),
         ];
+
+        // 🔐 If HOD: force faculty filter to allowed set
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (empty($managedFacultyIds)) {
+                // nothing allowed
+                $filters['faculty_id'] = null;
+            } elseif (!empty($filters['faculty_id']) && !in_array((int)$filters['faculty_id'], $managedFacultyIds)) {
+                // trying another faculty → override to first allowed or null
+                $filters['faculty_id'] = $managedFacultyIds[0] ?? null;
+            }
+        }
 
         // 3) Sections & subjects (dependent on faculty + semester)
         $sections = collect();
         $subjects = collect();
 
         if ($filters['faculty_id']) {
-            // sections of that faculty
             $sections = Section::where('faculty_id', $filters['faculty_id'])
                 ->orderBy('name')
                 ->get();
         }
+
         if ($filters['faculty_id'] && $filters['semester']) {
-            // map UI value → db tinyint
             $subjectBatchCode = null;
             if ($filters['subject_batch'] === 'new') {
                 $subjectBatchCode = 1;
@@ -60,45 +85,49 @@ class RoutineController extends Controller
             }
 
             $subjects = Subject::whereHas('semesterBindings', function ($q) use ($filters, $subjectBatchCode) {
-                $q->where('faculty_id', $filters['faculty_id'])
-                    ->where('semester',   $filters['semester']);
+                    $q->where('faculty_id', $filters['faculty_id'])
+                      ->where('semester',   $filters['semester']);
 
-                if (!is_null($subjectBatchCode)) {
-                    $q->where('batch', $subjectBatchCode); // 1 or 2
-                }
-            })
+                    if (!is_null($subjectBatchCode)) {
+                        $q->where('batch', $subjectBatchCode); // 1 or 2
+                    }
+                })
                 ->orderBy('code')
                 ->get();
         }
 
-
-
         // 4) Teachers and rooms
-        $teachers = Teacher::orderBy('name')->get();   // any teacher can teach any subject now
+        $teachers = Teacher::orderBy('name')->get();
         $rooms    = Room::orderBy('room_no')->get();
 
         // 5) Periods filtered by shift (for dropdown + grid)
         $periods = Period::when($filters['shift'], function ($q, $shift) {
-            $q->where('shift', $shift);
-        })
-            ->orderBy('order')   // correct order: 1,2,3,...
+                $q->where('shift', $shift);
+            })
+            ->orderBy('order')
             ->get();
 
-        // 6) Main routine list (paginated so ->total() & ->links() work)
+        // 6) Main routine list (scoped for department admins)
         $routines = Routine::with(['faculty', 'section', 'period', 'subject', 'teachers', 'room'])
-            ->filter($filters)               // your existing local scope
+            ->when($admin && $admin->isDepartmentAdmin(), function ($q) use ($managedFacultyIds) {
+                if (empty($managedFacultyIds)) {
+                    $q->whereRaw('0 = 1');
+                } else {
+                    $q->whereIn('faculty_id', $managedFacultyIds);
+                }
+            })
+            ->filter($filters)
             ->orderBy('day_of_week')
             ->orderBy('period_id')
             ->paginate(50);
 
         // 7) Grid helpers
-        $gridPeriods = $periods;            // only periods of selected shift
-        // Build grid as [day][period_id] = [ list of routines ]
-        $grid = [];
+        $gridPeriods = $periods;
+        $grid        = [];
 
         foreach ($routines as $r) {
-            $day = $r->day_of_week;   // 'sun', 'mon', ...
-            $pid = $r->period_id;     // 8, 9, 10 ...
+            $day = $r->day_of_week;
+            $pid = $r->period_id;
 
             if (!isset($grid[$day][$pid])) {
                 $grid[$day][$pid] = [];
@@ -117,11 +146,9 @@ class RoutineController extends Controller
             'fri' => 'FRI',
         ];
 
-        // 9) Send everything to view
         return view('Backend.admin.routines.index', compact(
             'faculties',
             'batches',
-            
             'semesters',
             'sections',
             'subjects',
@@ -136,19 +163,29 @@ class RoutineController extends Controller
         ));
     }
 
-
     public function store(Request $request)
     {
-        // 1) Validate base data (NO period_id here)
+        // 🔐 Current admin
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
+        // 1) Validate base data
         $data = $this->validateStore($request);
         $teacherIds = $data['teacher_ids'];
-        unset($data['teacher_ids']); // we'll use pivot
+        unset($data['teacher_ids']);
+
+        // 🔐 HOD can only create for their faculties
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (empty($managedFacultyIds) || !in_array((int)$data['faculty_id'], $managedFacultyIds)) {
+                abort(403, 'You are not allowed to create routine for this faculty.');
+            }
+        }
 
         // 2) Resolve start/end periods and build period range
         $startPeriod = Period::findOrFail($data['start_period_id']);
         $endPeriod   = Period::findOrFail($data['end_period_id']);
 
-        // must be same shift
         if ($startPeriod->shift !== $endPeriod->shift) {
             return back()
                 ->withErrors(['end_period_id' => 'Start and end period must be in the same shift.'])
@@ -175,9 +212,9 @@ class RoutineController extends Controller
         // 3) Business validation for each period (teacher conflict etc.)
         foreach ($periodsRange as $p) {
             foreach ($teacherIds as $tid) {
-                $row            = $data;
-                $row['period_id']   = $p->id;
-                $row['teacher_id']  = $tid; // for validation only
+                $row               = $data;
+                $row['period_id']  = $p->id;
+                $row['teacher_id'] = $tid;
 
                 $error = $this->businessValidation($row, null);
                 if ($error) {
@@ -191,9 +228,7 @@ class RoutineController extends Controller
             $row = $data;
             unset($row['start_period_id'], $row['end_period_id']);
             $row['period_id']  = $p->id;
-
-            // Optionally keep a "primary" teacher for quick reference
-            $row['teacher_id'] = $teacherIds[0];
+            $row['teacher_id'] = $teacherIds[0]; // primary teacher
 
             $routine = Routine::create($row);
             $routine->teachers()->sync($teacherIds);
@@ -202,14 +237,24 @@ class RoutineController extends Controller
         return redirect()->route('admin.routines.index', [
             'faculty_id' => $data['faculty_id'],
             'batch'      => $data['batch'],
-        
             'semester'   => $data['semester'],
             'section_id' => $data['section_id'],
         ])->with('ok', 'Routine entry created for selected period range.');
     }
 
-    public function edit(Routine $routine)
+    public function edit(Request $request, Routine $routine)
     {
+        // 🔐 Current admin
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (empty($managedFacultyIds) || !in_array((int)$routine->faculty_id, $managedFacultyIds)) {
+                abort(403, 'You are not allowed to edit routine of this faculty.');
+            }
+        }
+
         $faculties = Faculty::orderBy('name')->get();
         $periods   = Period::orderBy('order')->get();
 
@@ -225,9 +270,9 @@ class RoutineController extends Controller
             ->get();
 
         $subjects = Subject::whereHas('semesterBindings', function ($q) use ($routine) {
-            $q->where('faculty_id', $routine->faculty_id)
-                ->where('semester', $routine->semester);
-        })
+                $q->where('faculty_id', $routine->faculty_id)
+                  ->where('semester', $routine->semester);
+            })
             ->orderBy('code')
             ->get();
 
@@ -259,13 +304,25 @@ class RoutineController extends Controller
 
     public function update(Request $request, Routine $routine)
     {
+        // 🔐 Current admin
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
         $data       = $this->validateUpdate($request, $routine->id);
         $teacherIds = $data['teacher_ids'];
         unset($data['teacher_ids']);
 
+        // 🔐 HOD cannot move routine to a faculty they don't manage
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (empty($managedFacultyIds) || !in_array((int)$data['faculty_id'], $managedFacultyIds)) {
+                abort(403, 'You are not allowed to update routine for this faculty.');
+            }
+        }
+
         // clash check for all teachers
         foreach ($teacherIds as $tid) {
-            $row              = $data;
+            $row               = $data;
             $row['teacher_id'] = $tid;
             $error = $this->businessValidation($row, $routine->id);
             if ($error) {
@@ -273,12 +330,10 @@ class RoutineController extends Controller
             }
         }
 
-        // keep primary teacher = first
         $data['teacher_id'] = $teacherIds[0];
 
         $routine->update($data);
         $routine->teachers()->sync($teacherIds);
-
 
         return redirect()->route('admin.routines.index', [
             'faculty_id' => $data['faculty_id'],
@@ -288,8 +343,19 @@ class RoutineController extends Controller
         ])->with('ok', 'Routine entry updated.');
     }
 
-    public function destroy(Routine $routine)
+    public function destroy(Request $request, Routine $routine)
     {
+        // 🔐 Current admin
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (empty($managedFacultyIds) || !in_array((int)$routine->faculty_id, $managedFacultyIds)) {
+                abort(403, 'You are not allowed to delete routine of this faculty.');
+            }
+        }
+
         $routine->delete();
         return back()->with('ok', 'Routine entry deleted.');
     }
@@ -300,17 +366,32 @@ class RoutineController extends Controller
      */
     public function meta(Request $request)
     {
+        // 🔐 Current admin
+        /** @var \App\Models\Admin|null $admin */
+        $admin = $request->attributes->get('admin');
+        $managedFacultyIds = $admin ? $admin->managedFacultyIds() : [];
+
         $facultyId = $request->input('faculty_id');
         $semester  = $request->input('semester');
         $subjectBatch  = $request->input('subject_batch'); // 'old' or 'new'
-
-        $batch     = $request->input('batch'); // optional, in case you use it later
+        $batch     = $request->input('batch'); // optional
 
         if (!$facultyId || !$semester) {
             return response()->json([
                 'sections' => [],
                 'subjects' => [],
             ]);
+        }
+
+        // 🔐 HOD cannot fetch meta for other faculties
+        if ($admin && $admin->isDepartmentAdmin()) {
+            if (empty($managedFacultyIds) || !in_array((int)$facultyId, $managedFacultyIds)) {
+                return response()->json([
+                    'sections' => [],
+                    'subjects' => [],
+                    'error'    => 'Not allowed for this faculty.',
+                ], 403);
+            }
         }
 
         $sections = Section::where('faculty_id', $facultyId)
@@ -325,13 +406,13 @@ class RoutineController extends Controller
         }
 
         $subjects = Subject::whereHas('semesterBindings', function ($q) use ($facultyId, $semester, $subjectBatchCode) {
-            $q->where('faculty_id', $facultyId)
-                ->where('semester',   $semester);
+                $q->where('faculty_id', $facultyId)
+                  ->where('semester',   $semester);
 
-            if (!is_null($subjectBatchCode)) {
-                $q->where('batch', $subjectBatchCode);
-            }
-        })
+                if (!is_null($subjectBatchCode)) {
+                    $q->where('batch', $subjectBatchCode);
+                }
+            })
             ->orderBy('code')
             ->get()
             ->map(function ($s) {
@@ -369,7 +450,7 @@ class RoutineController extends Controller
             'group'      => ['required', Rule::in(['ALL', 'A', 'B','C','D','E','F','A/B','B/A','C/D','D/C','E/F','F/E'])],
             'type'       => ['required', Rule::in(['TH', 'PR'])],
 
-            'subject_id' => ['required', 'exists:subjects,id'],
+            'subject_id'    => ['required', 'exists:subjects,id'],
             'teacher_ids'   => ['required', 'array', 'min:1'],
             'teacher_ids.*' => ['integer', 'exists:teachers,id'],
 
@@ -386,13 +467,13 @@ class RoutineController extends Controller
             'semester'   => ['required', 'integer', 'between:1,10'],
             'section_id' => ['required', 'exists:sections,id'],
 
-            'period_id'  => ['required', 'exists:periods,id'],
+            'period_id'   => ['required', 'exists:periods,id'],
             'day_of_week' => ['required', Rule::in(['sun', 'mon', 'tue', 'wed', 'thu', 'fri'])],
 
             'group'      => ['required', Rule::in(['ALL', 'A', 'B','C','D','E','F','A/B','B/A','C/D','D/C','E/F','F/E'])],
             'type'       => ['required', Rule::in(['TH', 'PR'])],
 
-            'subject_id' => ['required', 'exists:subjects,id'],
+            'subject_id'    => ['required', 'exists:subjects,id'],
             'teacher_ids'   => ['required', 'array', 'min:1'],
             'teacher_ids.*' => ['integer', 'exists:teachers,id'],
 
@@ -400,6 +481,7 @@ class RoutineController extends Controller
             'academic_year' => ['nullable', 'string', 'max:15'],
         ]);
     }
+
 
     /**
      * Business rules applied PER single routine row (single period).
@@ -509,19 +591,45 @@ class RoutineController extends Controller
     // 3) Teacher conflict: same teacher, same day+period
     //    (works per teacher_id for now)
     // -------------------------------------------------------
-    $conflictQuery = Routine::where('teacher_id', $data['teacher_id'])
-        ->where('day_of_week', $data['day_of_week'])
-        ->where('period_id',   $data['period_id']);
+// 3) Teacher conflict: same teacher, same day+period (any faculty/section)
+$conflictQuery = Routine::where('teacher_id', $data['teacher_id'])
+    ->where('day_of_week', $data['day_of_week'])
+    ->where('period_id',   $data['period_id']);
 
-    if ($ignoreRoutineId) {
-        $conflictQuery->where('id', '!=', $ignoreRoutineId);
-    }
+if ($ignoreRoutineId) {
+    $conflictQuery->where('id', '!=', $ignoreRoutineId);
+}
 
-    if ($conflictQuery->exists()) {
-        return [
-            'teacher_id' => 'This teacher already has a class at this day and period.'
-        ];
-    }
+// Load the conflicting routine with faculty & section
+$conflict = $conflictQuery
+    ->with(['faculty', 'section', 'subject', 'period'])
+    ->first();
+
+if ($conflict) {
+
+    $teacherName  = optional($conflict->teacher)->name;
+    $facultyCode  = optional($conflict->faculty)->code;
+    $facultyName  = optional($conflict->faculty)->name;
+    $sectionName  = optional($conflict->section)->name;
+    $subjectCode  = optional($conflict->subject)->code;
+    $subjectName  = optional($conflict->subject)->name;
+    $periodLabel  = optional($conflict->period)->order; // or $conflict->period->name if you have
+    $dayLabel     = strtoupper($data['day_of_week']);
+
+    $message = "This teacher already has a class"
+             . ($subjectCode || $subjectName ? " ({$subjectCode} {$subjectName})" : "")
+             . " in {$facultyCode} {$facultyName}"
+             . ($sectionName ? " – Section {$sectionName}" : "")
+             . " on {$dayLabel} (Period {$periodLabel}).";
+
+    // You can attach the same conflict to multiple fields if you want them all red
+    return [
+        'teacher_id' => $message,
+        'faculty_id' => 'Conflict with existing routine for this teacher.',
+        'section_id' => 'Conflict with existing routine for this teacher.',
+    ];
+}
+
 
     return null;
 }
